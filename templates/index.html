@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropJunkie — AI Prop Analyzer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #08080f;
+            --surface: #111118;
+            --surface2: #1a1a26;
+            --border: #2a2a3e;
+            --accent: #7c3aed;
+            --accent-hover: #6d28d9;
+            --accent-glow: rgba(124, 58, 237, 0.25);
+            --green: #10b981;
+            --green-glow: rgba(16, 185, 129, 0.15);
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --text: #e2e8f0;
+            --muted: #64748b;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+        .logo span { color: var(--accent); }
+        .badge {
+            background: var(--accent-glow);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        /* ── Layout ── */
+        .container { max-width: 1200px; margin: 0 auto; padding: 28px 20px; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+        }
+        .card-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--muted);
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title::before {
+            content: '';
+            display: inline-block;
+            width: 3px; height: 13px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        /* ── Sport tabs ── */
+        .sport-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab {
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            transition: all 0.15s;
+        }
+        .tab:hover { border-color: var(--accent); color: var(--text); }
+        .tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 18px var(--accent-glow);
+        }
+
+        /* ── Game list ── */
+        .game-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 340px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .game-list::-webkit-scrollbar { width: 4px; }
+        .game-list::-webkit-scrollbar-track { background: transparent; }
+        .game-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .game-item {
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .game-item:hover { border-color: var(--accent); }
+        .game-item.selected { border-color: var(--accent); background: var(--accent-glow); }
+        .game-teams { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+        .game-time { font-size: 11px; color: var(--muted); }
+
+        /* ── Form ── */
+        .form-group { margin-bottom: 14px; }
+        label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+            margin-bottom: 7px;
+        }
+        input, select {
+            width: 100%;
+            padding: 11px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        input:focus, select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        select option { background: #1a1a26; }
+
+        /* ── Style tabs ── */
+        .style-tabs { display: flex; gap: 6px; }
+        .style-tab {
+            flex: 1;
+            padding: 8px 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .style-tab.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        /* ── Button ── */
+        .btn {
+            width: 100%;
+            padding: 13px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+            letter-spacing: 0.5px;
+            margin-top: 6px;
+        }
+        .btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+            box-shadow: 0 0 28px var(--accent-glow);
+            transform: translateY(-1px);
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ── Results ── */
+        .result-card {
+            display: none;
+            margin-top: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            animation: fadeIn 0.3s ease;
+        }
+        .result-card.show { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+        .result-header {
+            padding: 20px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .player-name { font-size: 20px; font-weight: 800; }
+        .market-label { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+        .hit-prob { text-align: right; }
+        .prob-value { font-size: 40px; font-weight: 900; line-height: 1; }
+        .prob-label { font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: 0.5px; }
+        .prob-high { color: var(--green); }
+        .prob-mid  { color: var(--yellow); }
+        .prob-low  { color: var(--red); }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border-bottom: 1px solid var(--border);
+        }
+        .stat-item {
+            padding: 14px 22px;
+            border-right: 1px solid var(--border);
+        }
+        .stat-item:last-child { border-right: none; }
+        .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 5px; }
+        .stat-value { font-size: 20px; font-weight: 800; }
+        .edge-pos { color: var(--green); }
+        .edge-neg { color: var(--red); }
+
+        .claude-take { padding: 20px 22px; }
+        .claude-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .claude-label::before { content: '✦'; font-size: 9px; }
+        .claude-text { font-size: 14px; line-height: 1.75; color: var(--text); }
+
+        /* ── Util ── */
+        .loading {
+            text-align: center;
+            padding: 36px 20px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .spinner {
+            width: 28px; height: 28px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: 0 auto 14px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty { text-align: center; padding: 36px 20px; color: var(--muted); font-size: 13px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">Prop<span>Junkie</span></div>
+    <div class="badge">AI Powered</div>
+</header>
+
+<div class="container">
+    <div class="grid">
+
+        <!-- GAME BROWSER -->
+        <div class="card">
+            <div class="card-title">Browse Games</div>
+            <div class="sport-tabs">
+                <div class="tab active" data-sport="basketball_nba">NBA</div>
+                <div class="tab" data-sport="americanfootball_nfl">NFL</div>
+                <div class="tab" data-sport="baseball_mlb">MLB</div>
+                <div class="tab" data-sport="icehockey_nhl">NHL</div>
+            </div>
+            <div class="game-list" id="gameList">
+                <div class="loading"><div class="spinner"></div>Loading games…</div>
+            </div>
+        </div>
+
+        <!-- PROP ANALYZER -->
+        <div class="card">
+            <div class="card-title">Analyze Prop</div>
+
+            <div class="form-group">
+                <label>Player Name</label>
+                <input type="text" id="playerName" placeholder="e.g. LeBron James">
+            </div>
+
+            <div class="form-group">
+                <label>Your Projection</label>
+                <input type="number" id="projection" placeholder="e.g. 26.5" step="0.5" min="0">
+            </div>
+
+            <div class="form-group">
+                <label>Stat Market</label>
+                <select id="market">
+                    <option value="player_points">Points</option>
+                    <option value="player_rebounds">Rebounds</option>
+                    <option value="player_assists">Assists</option>
+                    <option value="player_threes">3-Pointers Made</option>
+                    <option value="player_pass_yds">Pass Yards</option>
+                    <option value="player_rush_yds">Rush Yards</option>
+                    <option value="player_reception_yds">Receiving Yards</option>
+                    <option value="player_pitcher_strikeouts">Pitcher Strikeouts</option>
+                    <option value="player_shots_on_goal">Shots on Goal</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Claude's Style</label>
+                <div class="style-tabs">
+                    <div class="style-tab active" data-style="sharp">Sharp</div>
+                    <div class="style-tab" data-style="casual">Casual</div>
+                    <div class="style-tab" data-style="detailed">Detailed</div>
+                </div>
+            </div>
+
+            <button class="btn" id="analyzeBtn" onclick="analyzeProp()">Analyze Prop</button>
+        </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="result-card" id="resultCard">
+        <div id="resultContent"></div>
+    </div>
+</div>
+
+<script>
+    const API = '';   // empty = same origin (Flask serves this page)
+    let selectedEventId = null;
+    let selectedSport = 'basketball_nba';
+    let selectedStyle = 'sharp';
+
+    // Sport tab clicks
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            selectedSport = tab.dataset.sport;
+            selectedEventId = null;
+            loadGames(selectedSport);
+        });
+    });
+
+    // Style tab clicks
+    document.querySelectorAll('.style-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.style-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            selectedStyle = tab.dataset.style;
+        });
+    });
+
+    async function loadGames(sport) {
+        const list = document.getElementById('gameList');
+        list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading games…</div>';
+
+        try {
+            const res = await fetch(`${API}/events/${sport}`);
+            const games = await res.json();
+
+            if (!Array.isArray(games) || games.length === 0) {
+                list.innerHTML = '<div class="empty">No games scheduled today for this sport.</div>';
+                return;
+            }
+
+            list.innerHTML = games.map(g => {
+                const home = g.home_team || 'Home';
+                const away = g.away_team || 'Away';
+                const dt = g.commence_time ? new Date(g.commence_time) : null;
+                const time = dt ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                return `
+                    <div class="game-item" data-id="${g.id}" onclick="selectGame(this,'${g.id}')">
+                        <div class="game-teams">${away} @ ${home}</div>
+                        <div class="game-time">${time}</div>
+                    </div>`;
+            }).join('');
+        } catch (e) {
+            list.innerHTML = '<div class="empty">Could not load games. Check your Odds API key.</div>';
+        }
+    }
+
+    function selectGame(el, eventId) {
+        document.querySelectorAll('.game-item').forEach(g => g.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedEventId = eventId;
+    }
+
+    async function analyzeProp() {
+        const player     = document.getElementById('playerName').value.trim();
+        const projection = parseFloat(document.getElementById('projection').value);
+        const market     = document.getElementById('market').value;
+        const btn        = document.getElementById('analyzeBtn');
+        const card       = document.getElementById('resultCard');
+        const content    = document.getElementById('resultContent');
+
+        if (!player)              { alert('Enter a player name.'); return; }
+        if (isNaN(projection))    { alert('Enter a projection value.'); return; }
+        if (!selectedEventId)     { alert('Select a game from the left panel first.'); return; }
+
+        btn.disabled = true;
+        btn.textContent = 'Analyzing…';
+        card.classList.add('show');
+        content.innerHTML = '<div class="loading"><div class="spinner"></div>Running analysis…</div>';
+
+        try {
+            const res = await fetch(`${API}/analyze-prop`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    player, projection, market,
+                    sport: selectedSport,
+                    event_id: selectedEventId,
+                    style: selectedStyle
+                })
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                content.innerHTML = `<div class="loading" style="color:var(--red)">⚠ ${data.error}</div>`;
+                return;
+            }
+
+            const prob     = Math.round((data.hit_probability || 0) * 100);
+            const edgeRaw  = data.edge != null ? (data.edge * 100) : null;
+            const edge     = edgeRaw != null ? edgeRaw.toFixed(1) : null;
+            const probCls  = prob >= 60 ? 'prob-high' : prob >= 45 ? 'prob-mid' : 'prob-low';
+            const edgeCls  = edgeRaw != null && edgeRaw >= 0 ? 'edge-pos' : 'edge-neg';
+            const mktLabel = document.getElementById('market').selectedOptions[0].text;
+
+            content.innerHTML = `
+                <div class="result-header">
+                    <div>
+                        <div class="player-name">${player}</div>
+                        <div class="market-label">${mktLabel} · Line: ${data.line ?? '—'}</div>
+                    </div>
+                    <div class="hit-prob">
+                        <div class="prob-value ${probCls}">${prob}%</div>
+                        <div class="prob-label">Hit Probability</div>
+                    </div>
+                </div>
+                <div class="result-stats">
+                    <div class="stat-item">
+                        <div class="stat-label">Projection</div>
+                        <div class="stat-value">${projection}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Market Line</div>
+                        <div class="stat-value">${data.line ?? '—'}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Edge</div>
+                        <div class="stat-value ${edgeCls}">
+                            ${edge != null ? (edgeRaw >= 0 ? '+' : '') + edge + '%' : '—'}
+                        </div>
+                    </div>
+                </div>
+                ${data.claude_take ? `
+                <div class="claude-take">
+                    <div class="claude-label">Claude's Take</div>
+                    <div class="claude-text">${data.claude_take}</div>
+                </div>` : ''}
+            `;
+        } catch(e) {
+            content.innerHTML = `<div class="loading" style="color:var(--red)">Network error — is the API running?</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Analyze Prop';
+        }
+    }
+
+    // Kick off on load
+    loadGames(selectedSport);
+</script>
+</body>
+</html>

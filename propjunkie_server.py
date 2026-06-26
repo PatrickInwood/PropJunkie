@@ -17,7 +17,7 @@ Run in production (Railway):
 """
 
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props
@@ -27,6 +27,15 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # allows your website's frontend to call this API
+
+# ─────────────────────────────────────────
+# FRONTEND
+# ─────────────────────────────────────────
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
 
 # ─────────────────────────────────────────
 # HEALTH CHECK
