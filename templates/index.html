@@ -320,7 +320,9 @@
 
             <div class="form-group">
                 <label>Player Name</label>
-                <input type="text" id="playerName" placeholder="e.g. LeBron James">
+                <input type="text" id="playerName" placeholder="Start typing a name…"
+                       list="playerSuggestions" autocomplete="off">
+                <datalist id="playerSuggestions"></datalist>
             </div>
 
             <div class="form-group">
@@ -330,17 +332,7 @@
 
             <div class="form-group">
                 <label>Stat Market</label>
-                <select id="market">
-                    <option value="player_points">Points</option>
-                    <option value="player_rebounds">Rebounds</option>
-                    <option value="player_assists">Assists</option>
-                    <option value="player_threes">3-Pointers Made</option>
-                    <option value="player_pass_yds">Pass Yards</option>
-                    <option value="player_rush_yds">Rush Yards</option>
-                    <option value="player_reception_yds">Receiving Yards</option>
-                    <option value="player_pitcher_strikeouts">Pitcher Strikeouts</option>
-                    <option value="player_shots_on_goal">Shots on Goal</option>
-                </select>
+                <select id="market"></select>
             </div>
 
             <div class="form-group">
@@ -368,6 +360,92 @@
     let selectedSport = 'basketball_nba';
     let selectedStyle = 'sharp';
 
+    // ── Sport-specific markets ──────────────────────────────────────
+    const SPORT_MARKETS = {
+        basketball_nba: [
+            { value: 'player_points',   label: 'Points' },
+            { value: 'player_rebounds', label: 'Rebounds' },
+            { value: 'player_assists',  label: 'Assists' },
+            { value: 'player_threes',   label: '3-Pointers Made' },
+            { value: 'player_blocks',   label: 'Blocks' },
+            { value: 'player_steals',   label: 'Steals' },
+            { value: 'player_points_rebounds_assists', label: 'Pts + Reb + Ast' },
+        ],
+        americanfootball_nfl: [
+            { value: 'player_pass_yds',       label: 'Pass Yards' },
+            { value: 'player_pass_tds',       label: 'Pass TDs' },
+            { value: 'player_rush_yds',       label: 'Rush Yards' },
+            { value: 'player_reception_yds',  label: 'Receiving Yards' },
+            { value: 'player_receptions',     label: 'Receptions' },
+            { value: 'player_anytime_td',     label: 'Anytime TD' },
+        ],
+        baseball_mlb: [
+            { value: 'player_pitcher_strikeouts', label: 'Pitcher Strikeouts' },
+            { value: 'player_pitcher_outs',       label: 'Pitcher Outs' },
+            { value: 'player_pitcher_hits_allowed', label: 'Hits Allowed' },
+            { value: 'player_batter_home_runs',   label: 'Home Runs' },
+            { value: 'player_batter_hits',        label: 'Hits' },
+            { value: 'player_batter_total_bases', label: 'Total Bases' },
+            { value: 'player_batter_rbis',        label: 'RBIs' },
+            { value: 'player_batter_runs_scored', label: 'Runs Scored' },
+            { value: 'player_batter_stolen_bases', label: 'Stolen Bases' },
+        ],
+        icehockey_nhl: [
+            { value: 'player_shots_on_goal', label: 'Shots on Goal' },
+            { value: 'player_goals',         label: 'Goals' },
+            { value: 'player_assists',       label: 'Assists' },
+            { value: 'player_points',        label: 'Points' },
+        ],
+    };
+
+    // ── Player autocomplete lists ───────────────────────────────────
+    const SPORT_PLAYERS = {
+        basketball_nba: [
+            'LeBron James','Stephen Curry','Kevin Durant','Giannis Antetokounmpo',
+            'Luka Doncic','Nikola Jokic','Joel Embiid','Jayson Tatum','Damian Lillard',
+            'Anthony Davis','Devin Booker','Trae Young','Donovan Mitchell','Bam Adebayo',
+            'Karl-Anthony Towns','Domantas Sabonis','Jalen Brunson','Shai Gilgeous-Alexander',
+            'Pascal Siakam','De\'Aaron Fox','Zach LaVine','Julius Randle','Tyrese Haliburton',
+            'Paul George','Kawhi Leonard','Jimmy Butler','Anthony Edwards','Victor Wembanyama',
+        ],
+        americanfootball_nfl: [
+            'Patrick Mahomes','Josh Allen','Lamar Jackson','Joe Burrow','Jalen Hurts',
+            'Justin Jefferson','Tyreek Hill','Davante Adams','CeeDee Lamb','Stefon Diggs',
+            'Travis Kelce','Mark Andrews','Christian McCaffrey','Derrick Henry','Austin Ekeler',
+            'Justin Jefferson','Ja\'Marr Chase','Cooper Kupp','Deebo Samuel','Amon-Ra St. Brown',
+            'Justin Herbert','Dak Prescott','Tua Tagovailoa','Trevor Lawrence','Brock Purdy',
+        ],
+        baseball_mlb: [
+            'Shohei Ohtani','Aaron Judge','Freddie Freeman','Ronald Acuna Jr.',
+            'Mookie Betts','Fernando Tatis Jr.','Juan Soto','Pete Alonso','Yordan Alvarez',
+            'Julio Rodriguez','Jose Ramirez','Nolan Arenado','Paul Goldschmidt','Trea Turner',
+            'Gerrit Cole','Spencer Strider','Sandy Alcantara','Corbin Burnes','Shane Bieber',
+            'Max Scherzer','Carlos Rodon','Zack Wheeler','Brandon Woodruff','Dylan Cease',
+            'Corey Seager','Francisco Lindor','Bryce Harper','Mike Trout','Rafael Devers',
+            'Reynaldo Lopez','Logan Gilbert','Yu Darvish','Chris Sale','Jose Berrios',
+        ],
+        icehockey_nhl: [
+            'Connor McDavid','Nathan MacKinnon','Leon Draisaitl','Auston Matthews',
+            'David Pastrnak','Cale Makar','Roman Josi','Victor Hedman','Nicklas Backstrom',
+            'Sidney Crosby','Alex Ovechkin','Elias Pettersson','Jack Hughes','Brady Tkachuk',
+            'Matthew Tkachuk','Mitch Marner','William Nylander','Kirill Kaprizov','Igor Shesterkin',
+        ],
+    };
+
+    function updateMarketDropdown(sport) {
+        const select = document.getElementById('market');
+        const markets = SPORT_MARKETS[sport] || [];
+        select.innerHTML = markets.map(m =>
+            `<option value="${m.value}">${m.label}</option>`
+        ).join('');
+    }
+
+    function updatePlayerSuggestions(sport) {
+        const dl = document.getElementById('playerSuggestions');
+        const players = SPORT_PLAYERS[sport] || [];
+        dl.innerHTML = players.map(p => `<option value="${p}">`).join('');
+    }
+
     // Sport tab clicks
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -375,6 +453,8 @@
             tab.classList.add('active');
             selectedSport = tab.dataset.sport;
             selectedEventId = null;
+            updateMarketDropdown(selectedSport);
+            updatePlayerSuggestions(selectedSport);
             loadGames(selectedSport);
         });
     });
@@ -507,6 +587,8 @@
     }
 
     // Kick off on load
+    updateMarketDropdown(selectedSport);
+    updatePlayerSuggestions(selectedSport);
     loadGames(selectedSport);
 </script>
 </body>

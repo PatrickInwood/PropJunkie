@@ -64,11 +64,17 @@ MARKETS = {
     "nfl_receptions":       "player_receptions",
     "nfl_anytime_td":       "player_anytime_td",
 
-    # MLB
-    "mlb_strikeouts":       "player_pitcher_strikeouts",
-    "mlb_hits":             "player_hits",
-    "mlb_total_bases":      "player_total_bases",
-    "mlb_home_runs":        "player_home_runs",
+    # MLB — pitchers
+    "mlb_strikeouts":           "player_pitcher_strikeouts",
+    "mlb_pitcher_outs":         "player_pitcher_outs",
+    "mlb_hits_allowed":         "player_pitcher_hits_allowed",
+    # MLB — batters
+    "mlb_home_runs":            "player_batter_home_runs",
+    "mlb_hits":                 "player_batter_hits",
+    "mlb_total_bases":          "player_batter_total_bases",
+    "mlb_rbis":                 "player_batter_rbis",
+    "mlb_runs_scored":          "player_batter_runs_scored",
+    "mlb_stolen_bases":         "player_batter_stolen_bases",
 
     # NHL
     "nhl_shots":            "player_shots_on_goal",
@@ -78,15 +84,14 @@ MARKETS = {
 }
 
 # Free-tier bookmakers on The Odds API
+# Only include books confirmed to offer player props
 # (Westgate/SuperBook requires OpticOdds — see get_westgate_props())
 FREE_BOOKMAKERS = [
     "draftkings",
     "fanduel",
     "betmgm",
-    "bovada",
     "betrivers",
-    "mybookieag",
-    "espnbet",
+    "bovada",
 ]
 
 
@@ -215,15 +220,37 @@ def calculate_hit_probability(projection: float, line: float, std_dev_pct: float
 
 # Suggested std_dev_pct defaults by stat type
 STD_DEV_DEFAULTS = {
-    "player_points":              0.28,   # NBA pts — high variance
-    "player_rebounds":            0.32,
-    "player_assists":             0.35,
-    "player_threes":              0.55,   # very bursty
-    "player_pass_yds":            0.26,   # NFL passing
-    "player_rush_yds":            0.40,   # rushers are more volatile
-    "player_reception_yds":       0.45,
-    "player_pitcher_strikeouts":  0.30,   # MLB Ks
-    "player_shots_on_goal":       0.35,   # NHL shots
+    # NBA
+    "player_points":                        0.28,
+    "player_rebounds":                      0.32,
+    "player_assists":                       0.35,
+    "player_threes":                        0.55,
+    "player_blocks":                        0.60,
+    "player_steals":                        0.65,
+    "player_points_rebounds_assists":       0.22,
+    # NFL
+    "player_pass_yds":                      0.26,
+    "player_pass_tds":                      0.65,
+    "player_rush_yds":                      0.40,
+    "player_reception_yds":                 0.45,
+    "player_receptions":                    0.40,
+    "player_anytime_td":                    0.70,
+    # MLB — pitchers
+    "player_pitcher_strikeouts":            0.30,
+    "player_pitcher_outs":                  0.28,
+    "player_pitcher_hits_allowed":          0.35,
+    # MLB — batters (rare events = high variance)
+    "player_batter_home_runs":              0.90,
+    "player_batter_hits":                   0.45,
+    "player_batter_total_bases":            0.50,
+    "player_batter_rbis":                   0.70,
+    "player_batter_runs_scored":            0.65,
+    "player_batter_stolen_bases":           0.80,
+    # NHL
+    "player_shots_on_goal":                 0.35,
+    "player_goals":                         0.80,
+    "player_assists":                       0.70,
+    "player_points":                        0.55,
 }
 
 
