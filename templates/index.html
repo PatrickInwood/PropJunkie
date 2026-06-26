@@ -623,7 +623,7 @@
                 ${data.claude_take ? `
                 <div class="claude-take">
                     <div class="claude-label">Claude's Take</div>
-                    <div class="claude-text">${data.claude_take}</div>
+                    <div class="claude-text">${mdToHtml(data.claude_take)}</div>
                 </div>` : ''}
             `;
         } catch(e) {
@@ -632,6 +632,23 @@
             btn.disabled = false;
             btn.textContent = 'Analyze Prop';
         }
+    }
+
+    // ── Lightweight markdown → HTML renderer ──────────────────────
+    function mdToHtml(text) {
+        return text
+            // Headers → bold labels
+            .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+            // Bold **text**
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            // Italic *text*
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            // Horizontal rule ---
+            .replace(/^---+$/gm, '<hr style="border-color:var(--border);margin:10px 0">')
+            // Double newline → paragraph break
+            .replace(/\n{2,}/g, '<br><br>')
+            // Single newline
+            .replace(/\n/g, '<br>');
     }
 
     // Kick off on load
