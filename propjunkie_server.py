@@ -4,10 +4,13 @@ propjunkie_server.py
 Flask web server that exposes the PropJunkie API.
 
 Endpoints:
-  GET  /health              — health check
-  GET  /events/<sport>      — list today's games for a sport
-  POST /analyze-prop        — analyze a player prop
-  POST /create-checkout     — create a Stripe checkout session (Phase 4)
+  GET  /                 — landing page
+  GET  /app              — prop analyzer UI
+  GET  /health           — health check
+  GET  /events/<sport>   — list today's games for a sport
+  POST /analyze-prop     — analyze a player prop
+  POST /scan-props       — batch scan props
+  POST /create-checkout  — create a Stripe checkout session (Phase 4)
 
 Run locally:
   python propjunkie_server.py
@@ -19,6 +22,8 @@ Run in production (Railway):
 import os
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props
 
@@ -26,14 +31,34 @@ from prop_engine import analyze_prop, claude_explain, get_events, scan_props
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # allows your website's frontend to call this API
+CORS(app)
 
 # ─────────────────────────────────────────
-# FRONTEND
+# RATE LIMITING
+# 60 requests/minute globally per IP
+# Analyze-prop capped at 5/minute (free tier protection)
+# ─────────────────────────────────────────
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["60 per minute"],
+    storage_uri="memory://",
+)
+
+
+# ─────────────────────────────────────────
+# PAGES
 # ─────────────────────────────────────────
 
 @app.route('/', methods=['GET'])
-def index():
+@limiter.exempt
+def landing():
+    return render_template('landing.html')
+
+
+@app.route('/app', methods=['GET'])
+@limiter.exempt
+def app_page():
     return render_template('index.html')
 
 
@@ -42,6 +67,7 @@ def index():
 # ─────────────────────────────────────────
 
 @app.route('/health', methods=['GET'])
+@limiter.exempt
 def health():
     return jsonify({'status': 'ok', 'service': 'PropJunkie API'})
 
@@ -51,6 +77,7 @@ def health():
 # ─────────────────────────────────────────
 
 @app.route('/events/<sport>', methods=['GET'])
+@limiter.limit("30 per minute")
 def events(sport):
     """
     GET /events/basketball_nba
@@ -67,9 +94,11 @@ def events(sport):
 
 # ─────────────────────────────────────────
 # ANALYZE PROP — core endpoint
+# Rate limited to 5/minute per IP (free tier)
 # ─────────────────────────────────────────
 
 @app.route('/analyze-prop', methods=['POST'])
+@limiter.limit("5 per minute; 20 per hour")
 def analyze():
     """
     POST /analyze-prop
@@ -125,6 +154,7 @@ def analyze():
 # ─────────────────────────────────────────
 
 @app.route('/scan-props', methods=['POST'])
+@limiter.limit("2 per minute; 10 per hour")
 def scan():
     """
     POST /scan-props
@@ -156,20 +186,20 @@ def scan():
 
 
 # ─────────────────────────────────────────
-# STRIPE CHECKOUT (Phase 4 — add your
-# Stripe key and price IDs when ready)
+# STRIPE CHECKOUT (Phase 4)
 # ─────────────────────────────────────────
 
 @app.route('/create-checkout', methods=['POST'])
+@limiter.limit("10 per hour")
 def create_checkout():
     """
     POST /create-checkout
-    Body: { "email": "user@example.com", "tier": "plus" }
+    Body: { "email": "user@example.com", "tier": "pro" }
     Returns: { "checkout_url": "https://checkout.stripe.com/..." }
 
     Requires: pip install stripe
               STRIPE_SECRET_KEY in .env
-              STRIPE_PLUS_PRICE_ID in .env
+              STRIPE_PRO_PRICE_ID in .env
     """
     try:
         import stripe
@@ -177,11 +207,10 @@ def create_checkout():
 
         data  = request.json or {}
         email = data.get('email')
-        tier  = data.get('tier', 'plus')
+        tier  = data.get('tier', 'pro')
 
         price_id_map = {
-            'plus':  os.getenv('STRIPE_PLUS_PRICE_ID'),
-            'sharp': os.getenv('STRIPE_SHARP_PRICE_ID'),
+            'pro': os.getenv('STRIPE_PRO_PRICE_ID'),
         }
         price_id = price_id_map.get(tier)
 
@@ -193,8 +222,8 @@ def create_checkout():
             payment_method_types = ['card'],
             line_items           = [{'price': price_id, 'quantity': 1}],
             mode                 = 'subscription',
-            success_url          = os.getenv('SUCCESS_URL', 'https://yoursite.com/success'),
-            cancel_url           = os.getenv('CANCEL_URL',  'https://yoursite.com/pricing'),
+            success_url          = os.getenv('SUCCESS_URL', 'https://propjunkie-production.up.railway.app/app'),
+            cancel_url           = os.getenv('CANCEL_URL',  'https://propjunkie-production.up.railway.app/#pricing'),
         )
         return jsonify({'checkout_url': session.url})
 

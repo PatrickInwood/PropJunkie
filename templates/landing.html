@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropJunkie — Beat the Book with AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #08080f;
+            --surface: #111118;
+            --surface2: #1a1a26;
+            --border: #2a2a3e;
+            --accent: #7c3aed;
+            --accent-hover: #6d28d9;
+            --accent-glow: rgba(124, 58, 237, 0.3);
+            --green: #10b981;
+            --red: #ef4444;
+            --text: #e2e8f0;
+            --muted: #64748b;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+        }
+
+        a { text-decoration: none; color: inherit; }
+
+        /* ── NAV ── */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+        .logo span { color: var(--accent); }
+        .nav-links { display: flex; align-items: center; gap: 32px; }
+        .nav-links a { font-size: 14px; color: var(--muted); transition: color 0.15s; }
+        .nav-links a:hover { color: var(--text); }
+        .btn-nav {
+            padding: 8px 20px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+        .btn-nav:hover {
+            background: var(--accent-hover);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        /* ── HERO ── */
+        .hero {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 100px 24px 80px;
+            text-align: center;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--accent-glow);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 5px 14px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 28px;
+        }
+        .hero h1 {
+            font-size: clamp(42px, 7vw, 72px);
+            font-weight: 900;
+            letter-spacing: -2px;
+            line-height: 1.05;
+            margin-bottom: 24px;
+        }
+        .hero h1 .highlight {
+            background: linear-gradient(135deg, #7c3aed, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 18px;
+            color: var(--muted);
+            max-width: 560px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+        .hero-ctas {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            padding: 14px 32px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            transition: all 0.15s;
+            letter-spacing: 0.3px;
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            box-shadow: 0 0 30px var(--accent-glow);
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            padding: 14px 32px;
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── APP PREVIEW ── */
+        .preview {
+            max-width: 1000px;
+            margin: 0 auto 80px;
+            padding: 0 24px;
+        }
+        .preview-frame {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.5), 0 0 60px var(--accent-glow);
+        }
+        .preview-bar {
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot-red { background: #ef4444; }
+        .dot-yellow { background: #f59e0b; }
+        .dot-green { background: #10b981; }
+        .preview-url {
+            margin-left: 12px;
+            font-size: 12px;
+            color: var(--muted);
+            background: var(--bg);
+            padding: 4px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        .preview-inner {
+            padding: 28px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 640px) { .preview-inner { grid-template-columns: 1fr; } }
+        .preview-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+        }
+        .preview-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--muted);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .preview-label::before { content: ''; display: inline-block; width: 3px; height: 12px; background: var(--accent); border-radius: 2px; }
+        .preview-game {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .preview-game.sel { border-color: var(--accent); background: rgba(124,58,237,0.1); }
+        .preview-game-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+        .preview-result {
+            background: var(--bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .preview-result-head {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .preview-player { font-weight: 700; font-size: 15px; }
+        .preview-prob { font-size: 28px; font-weight: 900; color: var(--green); }
+        .preview-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border-bottom: 1px solid var(--border);
+        }
+        .preview-stat {
+            padding: 10px 12px;
+            border-right: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .preview-stat:last-child { border-right: none; }
+        .preview-stat-val { font-size: 16px; font-weight: 700; margin-top: 2px; }
+        .preview-claude { padding: 12px 14px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+        .preview-claude-label { font-size: 10px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+
+        /* ── SECTION WRAPPER ── */
+        .section { max-width: 1100px; margin: 0 auto; padding: 80px 24px; }
+        .section-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: clamp(28px, 4vw, 42px);
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 16px;
+        }
+        .section-sub { font-size: 16px; color: var(--muted); max-width: 520px; }
+
+        /* ── FEATURES ── */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 48px;
+        }
+        @media (max-width: 768px) { .features-grid { grid-template-columns: 1fr; } }
+        .feature-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            transition: border-color 0.2s;
+        }
+        .feature-card:hover { border-color: var(--accent); }
+        .feature-icon {
+            width: 44px; height: 44px;
+            background: var(--accent-glow);
+            border: 1px solid var(--accent);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 18px;
+        }
+        .feature-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+        .feature-desc { font-size: 14px; color: var(--muted); line-height: 1.7; }
+
+        /* ── HOW IT WORKS ── */
+        .how-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 48px;
+        }
+        @media (max-width: 768px) { .how-grid { grid-template-columns: 1fr; } }
+        .how-step {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 14px;
+        }
+        .step-num {
+            width: 36px; height: 36px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 800;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        .step-title { font-size: 17px; font-weight: 700; }
+        .step-desc { font-size: 14px; color: var(--muted); line-height: 1.7; }
+
+        /* ── SPORTS ── */
+        .sports-row {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 32px;
+        }
+        .sport-pill {
+            padding: 10px 22px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 40px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* ── PRICING ── */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 48px;
+            max-width: 720px;
+        }
+        @media (max-width: 640px) { .pricing-grid { grid-template-columns: 1fr; } }
+        .pricing-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 32px;
+        }
+        .pricing-card.featured {
+            border-color: var(--accent);
+            background: linear-gradient(135deg, #111118, #1a1030);
+            box-shadow: 0 0 40px var(--accent-glow);
+            position: relative;
+        }
+        .featured-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 16px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .plan-name { font-size: 14px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+        .plan-price { font-size: 42px; font-weight: 900; letter-spacing: -1px; margin-bottom: 4px; }
+        .plan-price span { font-size: 16px; font-weight: 500; color: var(--muted); }
+        .plan-desc { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+        .plan-features { list-style: none; margin-bottom: 28px; display: flex; flex-direction: column; gap: 10px; }
+        .plan-features li {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .plan-features li::before { content: '✓'; color: var(--green); font-weight: 700; font-size: 13px; flex-shrink: 0; }
+        .plan-features li.no::before { content: '✕'; color: var(--muted); }
+        .plan-features li.no { color: var(--muted); }
+        .btn-plan {
+            width: 100%;
+            padding: 13px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+            display: block;
+        }
+        .btn-plan-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-plan-outline:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-plan-fill {
+            background: var(--accent);
+            border: none;
+            color: #fff;
+        }
+        .btn-plan-fill:hover { background: var(--accent-hover); box-shadow: 0 0 24px var(--accent-glow); }
+
+        /* ── DISCLAIMER ── */
+        .disclaimer {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 24px 40px;
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.7;
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 28px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .footer-logo { font-size: 16px; font-weight: 800; }
+        .footer-logo span { color: var(--accent); }
+        .footer-copy { font-size: 13px; color: var(--muted); }
+        .footer-links { display: flex; gap: 24px; }
+        .footer-links a { font-size: 13px; color: var(--muted); transition: color 0.15s; }
+        .footer-links a:hover { color: var(--text); }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+    <div class="logo">Prop<span>Junkie</span></div>
+    <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="/app" class="btn-nav">Launch App →</a>
+    </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-badge">✦ AI-Powered Prop Analysis</div>
+    <h1>Beat the book<br>with <span class="highlight">AI</span></h1>
+    <p>Enter your projection, select a game, and get instant probability analysis powered by live sportsbook lines and Claude AI.</p>
+    <div class="hero-ctas">
+        <a href="/app" class="btn-primary">Try It Free →</a>
+        <a href="#pricing" class="btn-secondary">View Pricing</a>
+    </div>
+</section>
+
+<!-- APP PREVIEW (mock) -->
+<div class="preview">
+    <div class="preview-frame">
+        <div class="preview-bar">
+            <div class="dot dot-red"></div>
+            <div class="dot dot-yellow"></div>
+            <div class="dot dot-green"></div>
+            <div class="preview-url">propjunkie-production.up.railway.app/app</div>
+        </div>
+        <div class="preview-inner">
+            <div class="preview-card">
+                <div class="preview-label">Browse Games</div>
+                <div class="preview-game">
+                    <div>Lakers @ Warriors</div>
+                    <div class="preview-game-sub">7:30 PM</div>
+                </div>
+                <div class="preview-game sel">
+                    <div>Celtics @ Knicks</div>
+                    <div class="preview-game-sub">8:00 PM · Selected</div>
+                </div>
+                <div class="preview-game">
+                    <div>Nuggets @ Suns</div>
+                    <div class="preview-game-sub">9:00 PM</div>
+                </div>
+            </div>
+            <div class="preview-card">
+                <div class="preview-label">Analysis Result</div>
+                <div class="preview-result">
+                    <div class="preview-result-head">
+                        <div>
+                            <div class="preview-player">Jayson Tatum</div>
+                            <div style="font-size:11px;color:var(--muted)">Points · Line: 27.5</div>
+                        </div>
+                        <div>
+                            <div class="preview-prob">68%</div>
+                            <div style="font-size:10px;color:var(--muted)">Hit Prob</div>
+                        </div>
+                    </div>
+                    <div class="preview-stats">
+                        <div class="preview-stat">
+                            <div style="font-size:10px;color:var(--muted)">Projection</div>
+                            <div class="preview-stat-val">29.0</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div style="font-size:10px;color:var(--muted)">Market</div>
+                            <div class="preview-stat-val">27.5</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div style="font-size:10px;color:var(--muted)">Edge</div>
+                            <div class="preview-stat-val" style="color:var(--green)">+6.2%</div>
+                        </div>
+                    </div>
+                    <div class="preview-claude">
+                        <div class="preview-claude-label">✦ Claude's Take</div>
+                        Tatum has exceeded this line in 7 of his last 10 matchups against elite defenses. The +6.2% edge is real — the market may be undervaluing his recent usage spike.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+    <div class="section-label">Why PropJunkie</div>
+    <div class="section-title">Everything you need to<br>find your edge</div>
+    <p class="section-sub">Built for serious bettors who want data-driven analysis, not gut feelings.</p>
+
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <div class="feature-title">Live Sportsbook Lines</div>
+            <div class="feature-desc">Pulls real-time lines from DraftKings, FanDuel, BetMGM, and more via The Odds API. Always current, never stale.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <div class="feature-title">Hit Probability Engine</div>
+            <div class="feature-desc">Your projection vs. the market line, modeled with vig-removed true probabilities and sport-specific standard deviation.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">✦</div>
+            <div class="feature-title">Claude AI Analysis</div>
+            <div class="feature-desc">Get a natural-language breakdown of every prop in Sharp, Casual, or Detailed mode — powered by Anthropic's Claude.</div>
+        </div>
+    </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how-it-works" style="border-top: 1px solid var(--border);">
+    <div class="section-label">How It Works</div>
+    <div class="section-title">Three steps to your edge</div>
+
+    <div class="how-grid">
+        <div class="how-step">
+            <div class="step-num">1</div>
+            <div class="step-title">Pick a game</div>
+            <div class="step-desc">Browse today's live games across NBA, NFL, MLB, and NHL. Select the matchup you're targeting.</div>
+        </div>
+        <div class="how-step">
+            <div class="step-num">2</div>
+            <div class="step-title">Enter your projection</div>
+            <div class="step-desc">Type in the player and the stat line you're projecting. Choose the market and your analysis style.</div>
+        </div>
+        <div class="how-step">
+            <div class="step-num">3</div>
+            <div class="step-title">Get your analysis</div>
+            <div class="step-desc">See the hit probability, your edge vs. the market, and Claude's full take on whether the bet has value.</div>
+        </div>
+    </div>
+</section>
+
+<!-- SPORTS COVERED -->
+<section class="section" style="border-top: 1px solid var(--border);">
+    <div class="section-label">Sports Coverage</div>
+    <div class="section-title">All major sports, one tool</div>
+    <div class="sports-row">
+        <div class="sport-pill">🏀 NBA</div>
+        <div class="sport-pill">🏈 NFL</div>
+        <div class="sport-pill">⚾ MLB</div>
+        <div class="sport-pill">🏒 NHL</div>
+    </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing" style="border-top: 1px solid var(--border);">
+    <div class="section-label">Pricing</div>
+    <div class="section-title">Simple, transparent pricing</div>
+    <p class="section-sub">Start free. Upgrade when you're ready to go deeper.</p>
+
+    <div class="pricing-grid">
+        <!-- Free -->
+        <div class="pricing-card">
+            <div class="plan-name">Free</div>
+            <div class="plan-price">$0<span>/mo</span></div>
+            <div class="plan-desc">Perfect for trying it out</div>
+            <ul class="plan-features">
+                <li>5 prop analyses per day</li>
+                <li>NBA, NFL, MLB, NHL</li>
+                <li>Sharp analysis style</li>
+                <li class="no">Casual &amp; Detailed styles</li>
+                <li class="no">Batch prop scanning</li>
+                <li class="no">Priority support</li>
+            </ul>
+            <a href="/app" class="btn-plan btn-plan-outline">Get Started Free</a>
+        </div>
+
+        <!-- Pro -->
+        <div class="pricing-card featured">
+            <div class="featured-badge">Most Popular</div>
+            <div class="plan-name">Pro</div>
+            <div class="plan-price">$9.99<span>/mo</span></div>
+            <div class="plan-desc">For serious bettors</div>
+            <ul class="plan-features">
+                <li>Unlimited analyses</li>
+                <li>NBA, NFL, MLB, NHL</li>
+                <li>All 3 analysis styles</li>
+                <li>Batch prop scanning</li>
+                <li>Edge alerts</li>
+                <li>Priority support</li>
+            </ul>
+            <a href="/app" class="btn-plan btn-plan-fill">Start Pro — $9.99/mo</a>
+        </div>
+    </div>
+</section>
+
+<!-- DISCLAIMER -->
+<div class="disclaimer">
+    ⚠ PropJunkie is for entertainment and informational purposes only. This is not financial or gambling advice.<br>
+    Sports betting involves risk. Please gamble responsibly. Must be 21+ and in a jurisdiction where sports betting is legal.
+</div>
+
+<!-- FOOTER -->
+<footer>
+    <div class="footer-logo">Prop<span>Junkie</span></div>
+    <div class="footer-copy">© 2026 PropJunkie. All rights reserved.</div>
+    <div class="footer-links">
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="/app">Launch App</a>
+    </div>
+</footer>
+
+</body>
+</html>
