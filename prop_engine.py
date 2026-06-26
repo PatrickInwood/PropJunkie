@@ -123,15 +123,14 @@ def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: li
         "regions":     "us",          # let API return any US book that has the market
         "oddsFormat":  "american",
     }
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code == 422:
-            raise ValueError(
-                f"No odds available for this market on this game. "
-                f"The sportsbooks may not have posted lines yet, or this market "
-                f"({', '.join(markets)}) isn't offered for this event."
-            )
-        resp.raise_for_status()
+    resp = requests.get(url, params=params, timeout=10)
+    if resp.status_code == 422:
+        raise ValueError(
+            f"No odds available for this market on this game. "
+            f"The sportsbooks may not have posted lines yet, or this market "
+            f"({', '.join(markets)}) isn't offered for this event."
+        )
+    resp.raise_for_status()
     return resp.json()
 
 
