@@ -293,7 +293,7 @@
 <body>
 
 <header>
-    <div class="logo">Prop<span>Junkie</span></div>
+    <a href="/" class="logo" style="text-decoration:none;">Prop<span>Junkie</span></a>
     <div class="badge">AI Powered</div>
 </header>
 
@@ -351,6 +351,22 @@
     <!-- RESULTS -->
     <div class="result-card" id="resultCard">
         <div id="resultContent"></div>
+        <div style="padding: 0 22px 18px; text-align: right;">
+            <button onclick="analyzeProp()" style="
+                background: none;
+                border: 1px solid var(--border);
+                color: var(--muted);
+                padding: 6px 16px;
+                border-radius: 8px;
+                font-size: 12px;
+                cursor: pointer;
+                letter-spacing: 0.5px;
+                transition: all 0.2s;
+            " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+                ↺ Refresh Lines
+            </button>
+        </div>
     </div>
 </div>
 
