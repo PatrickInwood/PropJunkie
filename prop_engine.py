@@ -111,19 +111,27 @@ def get_events(sport_key: str) -> list:
 
 
 def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: list = None) -> dict:
-    """Pull player prop odds for a specific game."""
-    if bookmakers is None:
-        bookmakers = FREE_BOOKMAKERS
+    """Pull player prop odds for a specific game.
 
+    Uses regions=us instead of specifying exact bookmakers — this casts a
+    wider net and avoids 422 errors when individual books don't carry a market.
+    """
     url = f"{ODDS_API_BASE}/sports/{sport_key}/events/{event_id}/odds"
     params = {
         "apiKey":      ODDS_API_KEY,
         "markets":     ",".join(markets),
-        "bookmakers":  ",".join(bookmakers),
+        "regions":     "us",          # let API return any US book that has the market
         "oddsFormat":  "american",
     }
-    resp = requests.get(url, params=params, timeout=10)
-    resp.raise_for_status()
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code == 422:
+            raise ValueError(
+                f"No odds available for this market on this game. "
+                f"The sportsbooks may not have posted lines yet, or this market "
+                f"({', '.join(markets)}) isn't offered for this event."
+            )
+        resp.raise_for_status()
     return resp.json()
 
 
@@ -324,16 +332,39 @@ def analyze_prop(
     if std_dev_pct is None:
         std_dev_pct = STD_DEV_DEFAULTS.get(market_key, 0.25)
 
-    # Pull lines
-    if use_westgate:
-        raw_data  = get_westgate_props(sport_key, event_id, market_key)
-        props     = extract_player_prop(raw_data, player_name, market_key)
-    else:
-        raw_data  = get_event_props(sport_key, event_id, [market_key])
-        props     = extract_player_prop(raw_data, player_name, market_key)
+    # Pull lines — fall back gracefully if API has no lines for this market/event
+    props = []
+    no_lines_msg = None
+    try:
+        if use_westgate:
+            raw_data = get_westgate_props(sport_key, event_id, market_key)
+        else:
+            raw_data = get_event_props(sport_key, event_id, [market_key])
+        props = extract_player_prop(raw_data, player_name, market_key)
+        if not props:
+            no_lines_msg = (
+                f"No '{market_key}' line found for '{player_name}' in the API response. "
+                f"The books may not have posted this prop yet."
+            )
+    except ValueError as e:
+        no_lines_msg = str(e)
+    except Exception as e:
+        return {"error": str(e)}
 
-    if not props:
-        return {"error": f"No '{market_key}' prop found for '{player_name}'. Check spelling or market availability."}
+    # If no live lines, run a projection-only analysis (Claude still gives context)
+    if no_lines_msg:
+        return {
+            "player":          player_name,
+            "market":          market_key,
+            "sport":           sport_key,
+            "projection":      projection,
+            "line":            None,
+            "hit_probability": None,
+            "edge":            None,
+            "recommendation":  "No live lines — projection-only",
+            "no_lines":        True,
+            "no_lines_reason": no_lines_msg,
+        }
 
     # Use the line with the best over odds (you could change to 'under' if fading)
     top = best_line(props, side="over")
@@ -454,7 +485,24 @@ def claude_explain(analysis: dict, style: str = "sharp") -> str:
 
     system_prompt = style_instructions.get(style, style_instructions["sharp"])
 
-    user_prompt = f"""Analyze this prop bet and give your verdict:
+    # Build the prompt depending on whether we have live lines
+    if analysis.get("no_lines"):
+        user_prompt = f"""No live sportsbook lines are available yet for this prop.
+Give your contextual analysis based on what you know about this player and this stat:
+
+Player: {analysis['player']}
+Sport: {analysis['sport']}
+Market: {analysis['market']}
+My Projection: {analysis['projection']}
+
+Since there's no market line to compare against, focus on:
+- Whether {analysis['projection']} is a realistic projection for this player in this stat
+- Historical context for this player/matchup if you know it
+- General advice on whether this type of prop is typically good or bad value
+
+End with: NO LINE AVAILABLE — check back closer to game time."""
+    else:
+        user_prompt = f"""Analyze this prop bet and give your verdict:
 
 {json.dumps(analysis, indent=2)}
 

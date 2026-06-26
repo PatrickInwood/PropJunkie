@@ -538,23 +538,27 @@
                 return;
             }
 
-            const prob     = Math.round((data.hit_probability || 0) * 100);
-            const edgeRaw  = data.edge != null ? (data.edge * 100) : null;
-            const edge     = edgeRaw != null ? edgeRaw.toFixed(1) : null;
-            const probCls  = prob >= 60 ? 'prob-high' : prob >= 45 ? 'prob-mid' : 'prob-low';
-            const edgeCls  = edgeRaw != null && edgeRaw >= 0 ? 'edge-pos' : 'edge-neg';
             const mktLabel = document.getElementById('market').selectedOptions[0].text;
+            const noLines  = data.no_lines === true;
+
+            // Stats row — show dashes when no live lines
+            const prob    = data.hit_probability != null ? Math.round(data.hit_probability * 100) : null;
+            const edgeRaw = data.edge != null ? (data.edge * 100) : null;
+            const edge    = edgeRaw != null ? edgeRaw.toFixed(1) : null;
+            const probCls = prob == null ? '' : prob >= 60 ? 'prob-high' : prob >= 45 ? 'prob-mid' : 'prob-low';
+            const edgeCls = edgeRaw != null && edgeRaw >= 0 ? 'edge-pos' : 'edge-neg';
+
+            const probDisplay = prob != null
+                ? `<div class="prob-value ${probCls}">${prob}%</div><div class="prob-label">Hit Probability</div>`
+                : `<div class="prob-value" style="font-size:18px;color:var(--muted)">No Line</div><div class="prob-label">Check back later</div>`;
 
             content.innerHTML = `
                 <div class="result-header">
                     <div>
                         <div class="player-name">${player}</div>
-                        <div class="market-label">${mktLabel} · Line: ${data.line ?? '—'}</div>
+                        <div class="market-label">${mktLabel}${data.line != null ? ' · Line: ' + data.line : ' · No live line yet'}</div>
                     </div>
-                    <div class="hit-prob">
-                        <div class="prob-value ${probCls}">${prob}%</div>
-                        <div class="prob-label">Hit Probability</div>
-                    </div>
+                    <div class="hit-prob">${probDisplay}</div>
                 </div>
                 <div class="result-stats">
                     <div class="stat-item">
