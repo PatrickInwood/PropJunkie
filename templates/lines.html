@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropJunkie — Live Lines</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #08080f;
+            --surface: #111118;
+            --surface2: #1a1a26;
+            --border: #2a2a3e;
+            --accent: #7c3aed;
+            --accent-hover: #6d28d9;
+            --accent-glow: rgba(124, 58, 237, 0.25);
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --text: #e2e8f0;
+            --muted: #64748b;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            height: 60px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(8,8,15,0.95);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo {
+            font-size: 22px;
+            font-weight: 900;
+            color: var(--text);
+            letter-spacing: -0.5px;
+            text-decoration: none;
+        }
+        .logo span { color: var(--accent); }
+        .nav-links { display: flex; align-items: center; gap: 24px; }
+        .nav-link {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.15s;
+        }
+        .nav-link:hover { color: var(--text); }
+        .nav-link.active { color: var(--text); }
+        .btn-nav {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .btn-nav:hover { background: var(--accent-hover); }
+
+        /* ── Page layout ── */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        .page-header {
+            margin-bottom: 28px;
+        }
+        .page-title {
+            font-size: 28px;
+            font-weight: 900;
+            margin-bottom: 6px;
+        }
+        .page-subtitle {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        /* ── Sport tabs ── */
+        .sport-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .tab:hover { border-color: var(--accent); color: var(--text); }
+        .tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* ── Lines table header ── */
+        .lines-header {
+            display: grid;
+            grid-template-columns: 1fr 140px 160px 160px 120px;
+            gap: 12px;
+            padding: 10px 20px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 4px;
+        }
+
+        /* ── Game card ── */
+        .game-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: 1fr 140px 160px 160px 120px;
+            gap: 12px;
+            align-items: center;
+            padding: 16px 20px;
+            transition: border-color 0.15s;
+        }
+        .game-card:hover { border-color: #3a3a5e; }
+
+        .game-info .matchup {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .game-info .game-time {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .game-info .game-date {
+            font-size: 11px;
+            color: var(--accent);
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        /* ── Odds cells ── */
+        .odds-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .odds-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface2);
+            border-radius: 6px;
+            padding: 5px 10px;
+        }
+        .odds-team {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80px;
+        }
+        .odds-value {
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .odds-pos { color: var(--green); }
+        .odds-neg { color: var(--text); }
+        .odds-even { color: var(--yellow); }
+        .odds-na { color: var(--muted); font-size: 12px; }
+
+        .spread-line {
+            font-size: 11px;
+            color: var(--muted);
+            margin-right: 4px;
+        }
+
+        /* ── Action cell ── */
+        .action-cell { display: flex; flex-direction: column; gap: 6px; }
+        .btn-analyze {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 7px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            transition: background 0.15s;
+        }
+        .btn-analyze:hover { background: var(--accent-hover); }
+        .source-book {
+            font-size: 10px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        /* ── Loading / empty ── */
+        .loading-state, .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+        .spinner {
+            width: 32px; height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .date-group { margin-bottom: 28px; }
+        .date-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent);
+            margin-bottom: 10px;
+            padding-left: 4px;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 800px) {
+            .lines-header { display: none; }
+            .game-card {
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+            .odds-cell { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+            .odds-row { flex: 1; min-width: 120px; }
+            .action-cell { flex-direction: row; align-items: center; }
+            .btn-analyze { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <a href="/" class="logo">Prop<span>Junkie</span></a>
+    <div class="nav-links">
+        <a href="/lines" class="nav-link active">Lines</a>
+        <a href="/app" class="nav-link">Prop Analyzer</a>
+        <a href="/app" class="btn-nav">Analyze Props →</a>
+    </div>
+</header>
+
+<div class="container">
+    <div class="page-header">
+        <div class="page-title">Live Lines</div>
+        <div class="page-subtitle">Moneyline, spread, and total lines for upcoming games — updated in real time</div>
+    </div>
+
+    <div class="sport-tabs">
+        <div class="tab active" data-sport="baseball_mlb">⚾ MLB</div>
+        <div class="tab" data-sport="basketball_nba">🏀 NBA</div>
+        <div class="tab" data-sport="americanfootball_nfl">🏈 NFL</div>
+        <div class="tab" data-sport="icehockey_nhl">🏒 NHL</div>
+    </div>
+
+    <div class="lines-header">
+        <div>Game</div>
+        <div>Moneyline</div>
+        <div>Spread</div>
+        <div>Total (O/U)</div>
+        <div></div>
+    </div>
+
+    <div id="linesContainer">
+        <div class="loading-state"><div class="spinner"></div>Loading lines…</div>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    let selectedSport = 'baseball_mlb';
+
+    const SPORT_LABELS = {
+        baseball_mlb: 'MLB',
+        basketball_nba: 'NBA',
+        americanfootball_nfl: 'NFL',
+        icehockey_nhl: 'NHL',
+    };
+
+    // Sport tab clicks
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            selectedSport = tab.dataset.sport;
+            loadLines(selectedSport);
+        });
+    });
+
+    function formatOdds(val) {
+        if (val == null) return { text: '—', cls: 'odds-na' };
+        const n = Number(val);
+        if (n > 0) return { text: '+' + n, cls: 'odds-pos' };
+        if (n === 100 || n === -100) return { text: n, cls: 'odds-even' };
+        return { text: String(n), cls: 'odds-neg' };
+    }
+
+    function formatSpread(line, odds) {
+        if (line == null) return '—';
+        const sign = line > 0 ? '+' : '';
+        return `${sign}${line}`;
+    }
+
+    function shortName(name) {
+        // Return last word (team nickname) for compact display
+        const parts = name.split(' ');
+        return parts[parts.length - 1];
+    }
+
+    function groupByDate(games) {
+        const groups = {};
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        for (const g of games) {
+            const d = new Date(g.commence_time);
+            d.setHours(0,0,0,0);
+            let label;
+            if (d.getTime() === today.getTime()) label = 'Today';
+            else if (d.getTime() === tomorrow.getTime()) label = 'Tomorrow';
+            else label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            if (!groups[label]) groups[label] = [];
+            groups[label].push(g);
+        }
+        return groups;
+    }
+
+    function renderGame(g) {
+        const home = g.home_team;
+        const away = g.away_team;
+        const time = new Date(g.commence_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // Moneyline
+        const homeML = formatOdds(g.h2h?.home);
+        const awayML = formatOdds(g.h2h?.away);
+
+        // Spread
+        const homeSpread = g.spreads ? formatSpread(g.spreads.home_line, g.spreads.home_odds) : null;
+        const awaySpread = g.spreads ? formatSpread(g.spreads.away_line, g.spreads.away_odds) : null;
+        const homeSpreadOdds = formatOdds(g.spreads?.home_odds);
+        const awaySpreadOdds = formatOdds(g.spreads?.away_odds);
+
+        // Totals
+        const totalLine = g.totals?.line;
+        const overOdds  = formatOdds(g.totals?.over_odds);
+        const underOdds = formatOdds(g.totals?.under_odds);
+
+        const analyzeUrl = `/app`;
+
+        return `
+        <div class="game-card">
+            <div class="game-info">
+                <div class="matchup">${away} <span style="color:var(--muted);font-weight:400">@</span> ${home}</div>
+                <div class="game-time">${time}</div>
+            </div>
+
+            <div class="odds-cell">
+                <div class="odds-row">
+                    <span class="odds-team">${shortName(away)}</span>
+                    <span class="odds-value ${awayML.cls}">${awayML.text}</span>
+                </div>
+                <div class="odds-row">
+                    <span class="odds-team">${shortName(home)}</span>
+                    <span class="odds-value ${homeML.cls}">${homeML.text}</span>
+                </div>
+            </div>
+
+            <div class="odds-cell">
+                ${homeSpread != null ? `
+                <div class="odds-row">
+                    <span class="odds-team">${shortName(away)} <span class="spread-line">${awaySpread}</span></span>
+                    <span class="odds-value ${awaySpreadOdds.cls}">${awaySpreadOdds.text}</span>
+                </div>
+                <div class="odds-row">
+                    <span class="odds-team">${shortName(home)} <span class="spread-line">${homeSpread}</span></span>
+                    <span class="odds-value ${homeSpreadOdds.cls}">${homeSpreadOdds.text}</span>
+                </div>` : `<div class="odds-row"><span class="odds-na">No line</span></div>`}
+            </div>
+
+            <div class="odds-cell">
+                ${totalLine != null ? `
+                <div class="odds-row">
+                    <span class="odds-team">O ${totalLine}</span>
+                    <span class="odds-value ${overOdds.cls}">${overOdds.text}</span>
+                </div>
+                <div class="odds-row">
+                    <span class="odds-team">U ${totalLine}</span>
+                    <span class="odds-value ${underOdds.cls}">${underOdds.text}</span>
+                </div>` : `<div class="odds-row"><span class="odds-na">No line</span></div>`}
+            </div>
+
+            <div class="action-cell">
+                <a href="${analyzeUrl}" class="btn-analyze">Analyze Props →</a>
+                <div class="source-book">${g.source_book || ''}</div>
+            </div>
+        </div>`;
+    }
+
+    async function loadLines(sport) {
+        const container = document.getElementById('linesContainer');
+        container.innerHTML = '<div class="loading-state"><div class="spinner"></div>Loading lines…</div>';
+
+        try {
+            const res = await fetch(`${API}/game-lines/${sport}`);
+            const games = await res.json();
+
+            if (!Array.isArray(games) || games.length === 0) {
+                container.innerHTML = `<div class="empty-state">No upcoming ${SPORT_LABELS[sport]} games found.<br>Check back when the season is active.</div>`;
+                return;
+            }
+
+            const groups = groupByDate(games);
+            let html = '';
+            for (const [label, groupGames] of Object.entries(groups)) {
+                html += `<div class="date-group">
+                    <div class="date-label">${label}</div>
+                    ${groupGames.map(renderGame).join('')}
+                </div>`;
+            }
+            container.innerHTML = html;
+
+        } catch(e) {
+            container.innerHTML = `<div class="empty-state">Could not load lines. Check your Odds API key.</div>`;
+        }
+    }
+
+    // Start on MLB since it's in-season
+    loadLines(selectedSport);
+</script>
+</body>
+</html>

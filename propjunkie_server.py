@@ -4,13 +4,15 @@ propjunkie_server.py
 Flask web server that exposes the PropJunkie API.
 
 Endpoints:
-  GET  /                 — landing page
-  GET  /app              — prop analyzer UI
-  GET  /health           — health check
-  GET  /events/<sport>   — list today's games for a sport
-  POST /analyze-prop     — analyze a player prop
-  POST /scan-props       — batch scan props
-  POST /create-checkout  — create a Stripe checkout session (Phase 4)
+  GET  /                      — landing page
+  GET  /app                   — prop analyzer UI
+  GET  /lines                 — live lines browser (ML, spreads, totals)
+  GET  /health                — health check
+  GET  /events/<sport>        — list today's games for a sport
+  GET  /game-lines/<sport>    — ML, spread, total odds for upcoming games
+  POST /analyze-prop          — analyze a player prop
+  POST /scan-props            — batch scan props
+  POST /create-checkout       — create a Stripe checkout session (Phase 4)
 
 Run locally:
   python propjunkie_server.py
@@ -25,7 +27,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines
 
 # Load .env file when running locally
 load_dotenv()
@@ -62,6 +64,12 @@ def app_page():
     return render_template('index.html')
 
 
+@app.route('/lines', methods=['GET'])
+@limiter.exempt
+def lines_page():
+    return render_template('lines.html')
+
+
 # ─────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────
@@ -70,6 +78,24 @@ def app_page():
 @limiter.exempt
 def health():
     return jsonify({'status': 'ok', 'service': 'PropJunkie API'})
+
+
+# ─────────────────────────────────────────
+# GAME LINES — ML, spreads, totals
+# ─────────────────────────────────────────
+
+@app.route('/game-lines/<sport>', methods=['GET'])
+@limiter.limit("20 per minute")
+def game_lines(sport):
+    """
+    GET /game-lines/basketball_nba
+    Returns moneyline, spread, and totals for upcoming games.
+    """
+    try:
+        data = get_game_lines(sport)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ─────────────────────────────────────────

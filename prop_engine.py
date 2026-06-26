@@ -110,6 +110,94 @@ def get_events(sport_key: str) -> list:
     return resp.json()
 
 
+def get_game_lines(sport_key: str) -> list:
+    """
+    Pull moneyline (h2h), spreads, and totals for upcoming games.
+    Returns a clean list of games with odds from the best available book.
+    """
+    url = f"{ODDS_API_BASE}/sports/{sport_key}/odds"
+    params = {
+        "apiKey":     ODDS_API_KEY,
+        "markets":    "h2h,spreads,totals",
+        "regions":    "us",
+        "oddsFormat": "american",
+    }
+    resp = requests.get(url, params=params, timeout=10)
+    if resp.status_code in (422, 404):
+        return []
+    resp.raise_for_status()
+
+    PREFERRED_BOOKS = ["draftkings", "fanduel", "betmgm", "betrivers", "bovada"]
+    results = []
+
+    for event in resp.json():
+        game = {
+            "id":            event["id"],
+            "sport":         sport_key,
+            "home_team":     event["home_team"],
+            "away_team":     event["away_team"],
+            "commence_time": event["commence_time"],
+            "h2h":           None,
+            "spreads":       None,
+            "totals":        None,
+            "source_book":   None,
+        }
+
+        # Pick best available book
+        books = {b["key"]: b for b in event.get("bookmakers", [])}
+        book = None
+        for p in PREFERRED_BOOKS:
+            if p in books:
+                book = books[p]
+                game["source_book"] = p.replace("draftkings", "DraftKings")  \
+                                        .replace("fanduel", "FanDuel")        \
+                                        .replace("betmgm", "BetMGM")          \
+                                        .replace("betrivers", "BetRivers")    \
+                                        .replace("bovada", "Bovada")
+                break
+        if not book and books:
+            first_key = list(books.keys())[0]
+            book = books[first_key]
+            game["source_book"] = first_key
+
+        if book:
+            for market in book.get("markets", []):
+                key = market["key"]
+                outcomes = market.get("outcomes", [])
+
+                if key == "h2h":
+                    by_name = {o["name"]: o["price"] for o in outcomes}
+                    game["h2h"] = {
+                        "home": by_name.get(event["home_team"]),
+                        "away": by_name.get(event["away_team"]),
+                    }
+
+                elif key == "spreads":
+                    home_o = next((o for o in outcomes if o["name"] == event["home_team"]), None)
+                    away_o = next((o for o in outcomes if o["name"] == event["away_team"]), None)
+                    if home_o and away_o:
+                        game["spreads"] = {
+                            "home_line": home_o.get("point"),
+                            "home_odds": home_o["price"],
+                            "away_line": away_o.get("point"),
+                            "away_odds": away_o["price"],
+                        }
+
+                elif key == "totals":
+                    over  = next((o for o in outcomes if o["name"] == "Over"),  None)
+                    under = next((o for o in outcomes if o["name"] == "Under"), None)
+                    if over and under:
+                        game["totals"] = {
+                            "line":       over.get("point"),
+                            "over_odds":  over["price"],
+                            "under_odds": under["price"],
+                        }
+
+        results.append(game)
+
+    return results
+
+
 def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: list = None) -> dict:
     """Pull player prop odds for a specific game.
 
