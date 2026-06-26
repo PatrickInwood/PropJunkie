@@ -168,6 +168,10 @@
         }
         select option { background: #1a1a26; }
 
+        /* Hide the browser's datalist dropdown arrow so it looks like a plain text input */
+        input::-webkit-calendar-picker-indicator { display: none !important; }
+        input[list]::-webkit-list-button { display: none !important; }
+
         /* ── Style tabs ── */
         .style-tabs { display: flex; gap: 6px; }
         .style-tab {
@@ -320,7 +324,7 @@
 
             <div class="form-group">
                 <label>Player Name</label>
-                <input type="text" id="playerName" placeholder="Start typing a name…"
+                <input type="text" id="playerName" placeholder="Type any player name…"
                        list="playerSuggestions" autocomplete="off">
                 <datalist id="playerSuggestions"></datalist>
             </div>
@@ -432,13 +436,37 @@
             'Justin Herbert','Dak Prescott','Tua Tagovailoa','Trevor Lawrence','Brock Purdy',
         ],
         baseball_mlb: [
-            'Shohei Ohtani','Aaron Judge','Freddie Freeman','Ronald Acuna Jr.',
-            'Mookie Betts','Fernando Tatis Jr.','Juan Soto','Pete Alonso','Yordan Alvarez',
-            'Julio Rodriguez','Jose Ramirez','Nolan Arenado','Paul Goldschmidt','Trea Turner',
-            'Gerrit Cole','Spencer Strider','Sandy Alcantara','Corbin Burnes','Shane Bieber',
-            'Max Scherzer','Carlos Rodon','Zack Wheeler','Brandon Woodruff','Dylan Cease',
-            'Corey Seager','Francisco Lindor','Bryce Harper','Mike Trout','Rafael Devers',
-            'Reynaldo Lopez','Logan Gilbert','Yu Darvish','Chris Sale','Jose Berrios',
+            // Dodgers
+            'Shohei Ohtani','Mookie Betts','Freddie Freeman','Will Smith','Teoscar Hernandez',
+            'Roki Sasaki','Yoshinobu Yamamoto','Tyler Glasnow','Walker Buehler','Clayton Kershaw',
+            'James Paxton','Bobby Miller','Jack Flaherty',
+            // Padres
+            'Fernando Tatis Jr.','Xander Bogaerts','Jake Cronenworth','Jurickson Profar',
+            'Dylan Cease','Michael King','Joe Musgrove','Randy Vasquez','Matt Waldron',
+            // Yankees
+            'Aaron Judge','Juan Soto','Gerrit Cole','Carlos Rodon','Nestor Cortes','Clarke Schmidt',
+            // Braves
+            'Ronald Acuna Jr.','Ozzie Albies','Austin Riley','Spencer Strider','Chris Sale','Max Fried',
+            // Cubs / Cardinals / Brewers
+            'Corbin Burnes','Freddy Peralta','Colin Rea',
+            'Paul Goldschmidt','Nolan Arenado','Miles Mikolas',
+            // Mets / Phillies
+            'Pete Alonso','Francisco Lindor','Zack Wheeler','Aaron Nola','Ranger Suarez',
+            'Bryce Harper','Trea Turner',
+            // Red Sox / Rays / Orioles
+            'Rafael Devers','Triston Casas','Chris Sale',
+            'Zach Eflin','Shane McClanahan',
+            'Gunnar Henderson','Adley Rutschman','Corbin Burnes',
+            // Astros / Rangers / Athletics
+            'Yordan Alvarez','Jose Altuve','Framber Valdez','Hunter Brown',
+            'Corey Seager','Jordan Montgomery',
+            // Mariners / Angels
+            'Julio Rodriguez','Logan Gilbert','George Kirby','Luis Castillo',
+            'Mike Trout','Anthony Rendon',
+            // Other notable pitchers
+            'Sandy Alcantara','Yu Darvish','Jose Berrios','Kevin Gausman',
+            'Reynaldo Lopez','Lance Lynn','Dean Kremer','Shane Bieber',
+            'Logan Webb','Alex Cobb','Kyle Harrison',
         ],
         icehockey_nhl: [
             'Connor McDavid','Nathan MacKinnon','Leon Draisaitl','Auston Matthews',
