@@ -379,6 +379,8 @@
     let selectedEventId = null;
     let selectedSport = 'basketball_nba';
     let selectedStyle = 'sharp';
+    let selectedHomeTeam = null;
+    let selectedAwayTeam = null;
 
     // ── Sport-specific markets ──────────────────────────────────────
     const SPORT_MARKETS = {
@@ -543,7 +545,7 @@
                 const dt = g.commence_time ? new Date(g.commence_time) : null;
                 const time = dt ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 return `
-                    <div class="game-item" data-id="${g.id}" onclick="selectGame(this,'${g.id}')">
+                    <div class="game-item" data-id="${g.id}" data-home="${home}" data-away="${away}" onclick="selectGame(this,'${g.id}','${home}','${away}')">
                         <div class="game-teams">${away} @ ${home}</div>
                         <div class="game-time">${time}</div>
                     </div>`;
@@ -553,10 +555,12 @@
         }
     }
 
-    function selectGame(el, eventId) {
+    function selectGame(el, eventId, homeTeam, awayTeam) {
         document.querySelectorAll('.game-item').forEach(g => g.classList.remove('selected'));
         el.classList.add('selected');
         selectedEventId = eventId;
+        selectedHomeTeam = homeTeam;
+        selectedAwayTeam = awayTeam;
     }
 
     async function analyzeProp() {
@@ -584,7 +588,9 @@
                     player, projection, market,
                     sport: selectedSport,
                     event_id: selectedEventId,
-                    style: selectedStyle
+                    style: selectedStyle,
+                    home_team: selectedHomeTeam,
+                    away_team: selectedAwayTeam,
                 })
             });
             const data = await res.json();

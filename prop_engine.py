@@ -498,7 +498,12 @@ def scan_props(prop_list: list, sport_key: str, event_id: str, min_edge: float =
 # CLAUDE INTEGRATION
 # ─────────────────────────────────────────
 
-def claude_explain(analysis: dict, style: str = "sharp") -> str:
+def claude_explain(
+    analysis: dict,
+    style: str = "sharp",
+    home_team: str = None,
+    away_team: str = None,
+) -> str:
     """
     Feed analysis result to Claude for a gambler-friendly breakdown.
 
@@ -506,6 +511,10 @@ def claude_explain(analysis: dict, style: str = "sharp") -> str:
         "sharp"   — concise, data-forward, used by serious bettors
         "casual"  — plain English, good for general users
         "detailed" — full breakdown including all book lines and reasoning
+
+    home_team / away_team: pass the actual teams from the selected game so
+        Claude uses verified matchup context instead of potentially stale
+        training-data roster knowledge.
     """
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
@@ -528,32 +537,41 @@ def claude_explain(analysis: dict, style: str = "sharp") -> str:
 
     system_prompt = style_instructions.get(style, style_instructions["sharp"])
 
+    # Build verified matchup context from the live game selection — do NOT guess rosters
+    matchup_line = ""
+    if home_team and away_team:
+        matchup_line = f"Game (live from sportsbook API): {away_team} @ {home_team}\n"
+
     # Build the prompt depending on whether we have live lines
     if analysis.get("no_lines"):
         user_prompt = f"""No live sportsbook lines are available yet for this prop.
-Give your contextual analysis based on what you know about this player and this stat:
+Provide a concise contextual analysis focused on the numbers — avoid speculating about the player's current team, recent injuries, or roster situation since that information may be outdated.
 
-Player: {analysis['player']}
+{matchup_line}Player: {analysis['player']}
 Sport: {analysis['sport']}
 Market: {analysis['market']}
 My Projection: {analysis['projection']}
 
-Since there's no market line to compare against, focus on:
-- Whether {analysis['projection']} is a realistic projection for this player in this stat
-- Historical context for this player/matchup if you know it
-- General advice on whether this type of prop is typically good or bad value
+Focus on:
+- Whether {analysis['projection']} is a historically reasonable projection for this stat type
+- General advice on whether this type of prop tends to be good or bad value (market efficiency for this stat)
+- What line level would make the Over vs Under attractive given this projection
+
+Do NOT make claims about the player's current team, recent game logs, or injury status — your training data may be outdated. Stick to the numbers and stat-type context.
 
 End with: NO LINE AVAILABLE — check back closer to game time."""
     else:
         user_prompt = f"""Analyze this prop bet and give your verdict:
 
-{json.dumps(analysis, indent=2)}
+{matchup_line}{json.dumps(analysis, indent=2)}
 
 Key things to cover:
 - Model projects {analysis['projection']} vs line of {analysis['line']}
 - Model says {analysis['model_prob_over_pct']}% chance of Over, market implies {analysis['implied_prob_over_pct']}%
 - Edge: {analysis['edge_over_pct']}% on Over, {analysis['edge_under_pct']}% on Under
 - Recommendation: {analysis['recommendation']}
+
+The game matchup is provided above from live API data — use it. Do NOT speculate about roster moves or injuries not confirmed in this data.
 
 End your response with a clear OVER / UNDER / PASS on a new line."""
 

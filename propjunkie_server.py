@@ -147,6 +147,8 @@ def analyze():
     sport      = data.get('sport', 'basketball_nba')
     event_id   = data.get('event_id')
     style      = data.get('style', 'sharp')
+    home_team  = data.get('home_team')
+    away_team  = data.get('away_team')
 
     # Validate required fields
     if not player or projection is None or not event_id:
@@ -167,7 +169,10 @@ def analyze():
         )
 
         if 'error' not in result:
-            result['claude_take'] = claude_explain(result, style=style)
+            result['claude_take'] = claude_explain(
+                result, style=style,
+                home_team=home_team, away_team=away_team
+            )
 
         return jsonify(result)
 
