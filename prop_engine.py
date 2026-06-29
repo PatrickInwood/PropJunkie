@@ -4,8 +4,7 @@ prop_engine.py
 Projection Engine → Prop Bet Analyzer with Claude Integration
 
 Data sources:
-  - The Odds API (free tier)  →  DraftKings, FanDuel, BetMGM, Bovada, etc.
-  - OpticOdds (paid)          →  Westgate SuperBook + 100 other books
+  - The Odds API (free tier)  →  DraftKings, FanDuel, BetMGM, BetRivers, Bovada
 
 Pipeline:
   1. Pull live player prop lines from sportsbook API
@@ -34,11 +33,9 @@ import anthropic
 # ─────────────────────────────────────────
 
 ODDS_API_KEY    = os.getenv("ODDS_API_KEY", "YOUR_ODDS_API_KEY")
-OPTICODDS_KEY   = os.getenv("OPTICODDS_KEY", "YOUR_OPTICODDS_KEY")   # for Westgate
 ANTHROPIC_KEY   = os.getenv("ANTHROPIC_API_KEY", "YOUR_ANTHROPIC_KEY")
 
 ODDS_API_BASE   = "https://api.the-odds-api.com/v4"
-OPTICODDS_BASE  = "https://api.opticodds.com/v1"   # see opticodds.com/docs
 
 
 # ─────────────────────────────────────────
@@ -85,7 +82,6 @@ MARKETS = {
 
 # Free-tier bookmakers on The Odds API
 # Only include books confirmed to offer player props
-# (Westgate/SuperBook requires OpticOdds — see get_westgate_props())
 FREE_BOOKMAKERS = [
     "draftkings",
     "fanduel",
@@ -218,41 +214,6 @@ def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: li
             f"The sportsbooks may not have posted lines yet, or this market "
             f"({', '.join(markets)}) isn't offered for this event."
         )
-    resp.raise_for_status()
-    return resp.json()
-
-
-# ─────────────────────────────────────────
-# DATA LAYER — OpticOdds (Westgate/SuperBook)
-# Set OPTICODDS_KEY to enable this path.
-# Sign up: opticodds.com/contact
-# ─────────────────────────────────────────
-
-def get_westgate_props(sport: str, event_id: str, market: str) -> dict:
-    """
-    Pull Westgate SuperBook player props via OpticOdds API.
-    Returns same normalized format as get_event_props() for drop-in use.
-
-    Requires a paid OpticOdds subscription.
-    Docs: https://developer.opticodds.com/reference/getting-started
-    """
-    if OPTICODDS_KEY == "YOUR_OPTICODDS_KEY":
-        raise ValueError(
-            "Westgate/SuperBook requires an OpticOdds API key.\n"
-            "Sign up at https://opticodds.com/contact\n"
-            "Then set OPTICODDS_KEY in your environment."
-        )
-
-    url = f"{OPTICODDS_BASE}/odds"
-    headers = {"X-Api-Key": OPTICODDS_KEY}
-    params = {
-        "sport":      sport,
-        "eventId":    event_id,
-        "market":     market,
-        "sportsbook": "superbook",   # Westgate SuperBook key in OpticOdds
-        "oddsFormat": "american",
-    }
-    resp = requests.get(url, headers=headers, params=params, timeout=10)
     resp.raise_for_status()
     return resp.json()
 
@@ -398,7 +359,6 @@ def analyze_prop(
     sport_key:    str,
     event_id:     str,
     std_dev_pct:  float = None,
-    use_westgate: bool  = False,
 ) -> dict:
     """
     Full analysis pipeline for a single player prop.
@@ -410,7 +370,6 @@ def analyze_prop(
         sport_key:    Sport identifier (e.g. "basketball_nba")
         event_id:     Event ID from get_events()
         std_dev_pct:  Override default volatility for this stat
-        use_westgate: Pull from Westgate SuperBook via OpticOdds (requires paid key)
 
     Returns:
         Analysis dict with probabilities, edge, and recommendation
@@ -423,10 +382,7 @@ def analyze_prop(
     props = []
     no_lines_msg = None
     try:
-        if use_westgate:
-            raw_data = get_westgate_props(sport_key, event_id, market_key)
-        else:
-            raw_data = get_event_props(sport_key, event_id, [market_key])
+        raw_data = get_event_props(sport_key, event_id, [market_key])
         props = extract_player_prop(raw_data, player_name, market_key)
         if not props:
             no_lines_msg = (
@@ -699,7 +655,6 @@ if __name__ == "__main__":
         market_key   = MARKET,
         sport_key    = SPORT,
         event_id     = event_id,
-        # use_westgate = True,  # ← Uncomment after setting OPTICODDS_KEY
     )
 
     print_analysis(result)
