@@ -465,51 +465,72 @@
         .btn-parlay:active { transform: scale(0.96); }
         html[data-theme="light"] .btn-parlay:hover { color: #fff; }
 
-        /* ── Parlay Builder card ── */
-        .parlay-card {
-            display: none;
-            margin-top: 16px;
+        /* ── Floating Parlay Tray ── */
+        .parlay-tray {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 200;
             background: var(--surface);
-            border: 1px solid var(--accent);
-            border-radius: 16px;
-            overflow: hidden;
-            transition: background 0.25s ease;
+            border-top: 2px solid var(--accent);
+            box-shadow: 0 -4px 32px rgba(0,0,0,0.45);
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s ease;
         }
-        .parlay-card.show {
-            display: block;
-            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .parlay-header {
-            padding: 13px 20px;
-            border-bottom: 1px solid var(--border);
+        .parlay-tray.visible { transform: translateY(0); }
+
+        .tray-bar {
+            height: 54px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            padding: 0 24px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
         }
-        .parlay-title {
+        .tray-bar:hover { background: var(--surface2); }
+
+        .tray-left { display: flex; align-items: center; gap: 11px; }
+        .tray-count { font-size: 13px; font-weight: 800; color: var(--text); }
+        .tray-pill {
+            background: var(--accent-glow);
+            border: 1px solid var(--accent);
+            color: var(--accent);
             font-size: 10px;
             font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            color: var(--accent);
+            padding: 3px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.5px;
         }
-        .btn-clear {
-            background: none;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            padding: 4px 12px;
-            border-radius: 7px;
-            font-size: 10px;
+        .tray-toggle-label {
+            font-size: 11px;
             font-weight: 700;
-            font-family: 'Inter', sans-serif;
-            cursor: pointer;
-            transition: all 0.15s;
+            color: var(--muted);
+            letter-spacing: 0.3px;
+            transition: color 0.15s;
         }
-        .btn-clear:hover { border-color: var(--red); color: var(--red); }
+        .tray-bar:hover .tray-toggle-label { color: var(--accent); }
 
-        .parlay-legs { padding: 12px 20px; display: flex; flex-direction: column; gap: 7px; }
+        .tray-panel {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            border-top: 1px solid var(--border);
+        }
+        .parlay-tray.open .tray-panel { max-height: 400px; }
 
-        .parlay-leg {
+        .tray-legs-list {
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+        .tray-legs-list::-webkit-scrollbar { width: 3px; }
+        .tray-legs-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .tray-leg {
             background: var(--surface2);
             border: 1px solid var(--border);
             border-radius: 9px;
@@ -517,11 +538,12 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .leg-player { font-size: 12px; font-weight: 700; color: var(--text); }
-        .leg-detail { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 500; }
-        .leg-side { color: var(--accent); font-weight: 800; }
+        .tray-leg-player { font-size: 12px; font-weight: 700; color: var(--text); }
+        .tray-leg-detail { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 500; }
+        .tray-leg-side { color: var(--accent); font-weight: 800; }
+
         .btn-remove {
             background: none;
             border: none;
@@ -536,25 +558,55 @@
         }
         .btn-remove:hover { color: var(--red); background: var(--red-dim); }
 
-        .parlay-summary {
+        .btn-clear {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 4px 12px;
+            border-radius: 7px;
+            font-size: 10px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-clear:hover { border-color: var(--red); color: var(--red); }
+
+        .tray-footer {
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid var(--border);
+        }
+        .tray-footer-label { font-size: 9px; font-weight: 800; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+
+        .tray-summary {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 1px;
             border-top: 1px solid var(--border);
-            background: var(--border);
+            background: var(--surface2);
         }
-        .p-stat {
-            padding: 14px 18px;
-            background: var(--surface);
+        .tray-stat { padding: 12px 18px; border-right: 1px solid var(--border); }
+        .tray-stat:last-child { border-right: none; }
+        .tray-stat-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 4px; }
+        .tray-stat-value { font-size: 20px; font-weight: 900; color: var(--accent); letter-spacing: -0.5px; }
+        .tray-stat-sub { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 500; }
+
+        @media (max-width: 600px) {
+            .tray-bar { padding: 0 14px; }
+            .tray-pill { display: none; }
+            .tray-summary { grid-template-columns: repeat(2, 1fr); }
+            .tray-stat:nth-child(2) { border-right: none; }
+            .tray-stat:nth-child(3) { grid-column: span 2; border-top: 1px solid var(--border); border-right: none; }
+            .tray-legs-list { padding: 10px 14px; }
+            .tray-footer { padding: 8px 14px; }
         }
-        .p-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 4px; }
-        .p-value { font-size: 22px; font-weight: 900; color: var(--accent); letter-spacing: -0.5px; }
-        .p-sub { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 500; }
 
         /* ── Toast ── */
         .toast {
             position: fixed;
-            bottom: 24px;
+            bottom: 70px;
             left: 50%;
             transform: translateX(-50%) translateY(12px);
             background: var(--surface);
@@ -700,15 +752,27 @@
     <div class="result-card" id="resultCard">
         <div id="resultContent"></div>
     </div>
+</div>
 
-    <!-- PARLAY BUILDER -->
-    <div class="parlay-card" id="parlayCard" data-anchor="parlay" style="scroll-margin-top: 70px;">
-        <div class="parlay-header">
-            <div class="parlay-title">⚡ Parlay Builder</div>
+<!-- FLOATING PARLAY TRAY -->
+<div class="parlay-tray" id="parlayTray">
+    <!-- Collapsed bar — always visible when tray is shown -->
+    <div class="tray-bar" onclick="toggleTray()">
+        <div class="tray-left">
+            <span>⚡</span>
+            <span class="tray-count" id="trayCount">0 Legs</span>
+            <span class="tray-pill" id="trayPill" style="display:none;"></span>
+        </div>
+        <span class="tray-toggle-label" id="trayToggleLabel">View Parlay ▲</span>
+    </div>
+    <!-- Expanded panel -->
+    <div class="tray-panel" id="trayPanel">
+        <div class="tray-legs-list" id="trayLegsList"></div>
+        <div class="tray-footer">
+            <span class="tray-footer-label">Parlay Builder</span>
             <button class="btn-clear" onclick="clearParlay()">Clear All</button>
         </div>
-        <div class="parlay-legs" id="parlayLegs"></div>
-        <div class="parlay-summary" id="parlaySummary"></div>
+        <div class="tray-summary" id="traySummary"></div>
     </div>
 </div>
 
@@ -723,15 +787,34 @@
     let parlayLegs        = [];
     let toastTimer        = null;
 
-    // ── Parlay scroll ─────────────────────────────────────────────────
+    // ── Parlay tray controls ──────────────────────────────────────────
+    let trayOpen = false;
+
     function scrollToParlay(e) {
         e.preventDefault();
-        const card = document.getElementById('parlayCard');
         if (parlayLegs.length === 0) {
-            showToast('⚡ Add a prop analysis first, then use Add to Parlay');
+            showToast('⚡ Analyze a prop first, then tap Add to Parlay');
             return;
         }
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        openTray();
+    }
+
+    function toggleTray() {
+        if (trayOpen) closeTray(); else openTray();
+    }
+
+    function openTray() {
+        trayOpen = true;
+        document.getElementById('parlayTray').classList.add('open');
+        document.getElementById('trayToggleLabel').textContent = 'Close ▼';
+        document.body.style.paddingBottom = '54px';
+    }
+
+    function closeTray() {
+        trayOpen = false;
+        document.getElementById('parlayTray').classList.remove('open');
+        document.getElementById('trayToggleLabel').textContent = 'View Parlay ▲';
+        if (parlayLegs.length === 0) document.body.style.paddingBottom = '0';
     }
 
     // ── Theme ─────────────────────────────────────────────────────────
@@ -1269,36 +1352,54 @@
         const prob = lastResult.model_prob_over_pct != null ? Math.round(lastResult.model_prob_over_pct)
             : lastResult.hit_probability != null ? Math.round(lastResult.hit_probability * 100) : null;
 
+        const isFirst = parlayLegs.length === 0;
         parlayLegs.push({ id: Date.now(), player: lastResult.player, market: mktLabel, side, prob });
         renderParlay();
         showToast('✓ Added to parlay');
+        // Auto-open tray on first leg so users discover it
+        if (isFirst) openTray();
     }
 
     function removeLeg(id) {
         parlayLegs = parlayLegs.filter(l => l.id !== id);
         renderParlay();
+        if (parlayLegs.length === 0) {
+            document.getElementById('parlayTray').classList.remove('visible');
+            closeTray();
+        }
     }
 
     function clearParlay() {
         parlayLegs = [];
         renderParlay();
+        document.getElementById('parlayTray').classList.remove('visible');
+        closeTray();
+        document.body.style.paddingBottom = '0';
     }
 
     function renderParlay() {
-        const card    = document.getElementById('parlayCard');
-        const legList = document.getElementById('parlayLegs');
-        const summary = document.getElementById('parlaySummary');
+        const tray     = document.getElementById('parlayTray');
+        const legList  = document.getElementById('trayLegsList');
+        const summary  = document.getElementById('traySummary');
+        const countEl  = document.getElementById('trayCount');
+        const pillEl   = document.getElementById('trayPill');
 
-        if (parlayLegs.length === 0) { card.classList.remove('show'); return; }
-        card.classList.add('show');
+        if (parlayLegs.length === 0) {
+            tray.classList.remove('visible');
+            return;
+        }
+        tray.classList.add('visible');
+        document.body.style.paddingBottom = '54px';
+
+        countEl.textContent = `${parlayLegs.length} Leg${parlayLegs.length > 1 ? 's' : ''}`;
 
         legList.innerHTML = parlayLegs.map(leg => `
-            <div class="parlay-leg">
+            <div class="tray-leg">
                 <div>
-                    <div class="leg-player">${escHtml(leg.player)} — <span class="leg-side">${leg.side}</span></div>
-                    <div class="leg-detail">${escHtml(leg.market)}${leg.prob != null ? ' · ' + leg.prob + '% model prob' : ''}</div>
+                    <div class="tray-leg-player">${escHtml(leg.player)} — <span class="tray-leg-side">${leg.side}</span></div>
+                    <div class="tray-leg-detail">${escHtml(leg.market)}${leg.prob != null ? ' · ' + leg.prob + '% hit prob' : ''}</div>
                 </div>
-                <button class="btn-remove" onclick="removeLeg(${leg.id})" aria-label="Remove leg">✕</button>
+                <button class="btn-remove" onclick="removeLeg(${leg.id})" aria-label="Remove">✕</button>
             </div>`).join('');
 
         const withProb = parlayLegs.filter(l => l.prob != null);
@@ -1308,16 +1409,35 @@
             const odds     = combined >= 0.5
                 ? '-' + Math.round((combined / (1 - combined)) * 100)
                 : '+' + Math.round(((1 - combined) / combined) * 100);
+            pillEl.textContent = odds;
+            pillEl.style.display = '';
             summary.innerHTML = `
-                <div class="p-stat"><div class="p-label">Legs</div><div class="p-value">${parlayLegs.length}</div></div>
-                <div class="p-stat"><div class="p-label">Combined Prob</div><div class="p-value">${pct}%</div><div class="p-sub">Model estimate</div></div>
-                <div class="p-stat"><div class="p-label">Fair Odds</div><div class="p-value">${odds}</div><div class="p-sub">No-vig American</div></div>`;
+                <div class="tray-stat">
+                    <div class="tray-stat-label">Legs</div>
+                    <div class="tray-stat-value">${parlayLegs.length}</div>
+                </div>
+                <div class="tray-stat">
+                    <div class="tray-stat-label">Combined Prob</div>
+                    <div class="tray-stat-value">${pct}%</div>
+                    <div class="tray-stat-sub">Model estimate</div>
+                </div>
+                <div class="tray-stat">
+                    <div class="tray-stat-label">Fair Odds</div>
+                    <div class="tray-stat-value">${odds}</div>
+                    <div class="tray-stat-sub">No-vig American</div>
+                </div>`;
         } else {
+            pillEl.style.display = 'none';
             const need = 2 - withProb.length;
             summary.innerHTML = `
-                <div class="p-stat"><div class="p-label">Legs</div><div class="p-value">${parlayLegs.length}</div></div>
-                <div class="p-stat" style="grid-column:span 2;"><div class="p-label">Combined Odds</div>
-                <div class="p-sub" style="font-size:12px;margin-top:5px;">Add ${need} more leg${need > 1 ? 's' : ''} with live lines to see combined odds</div></div>`;
+                <div class="tray-stat">
+                    <div class="tray-stat-label">Legs</div>
+                    <div class="tray-stat-value">${parlayLegs.length}</div>
+                </div>
+                <div class="tray-stat" style="grid-column:span 2;">
+                    <div class="tray-stat-label">Combined Odds</div>
+                    <div class="tray-stat-sub" style="font-size:11px;margin-top:6px;">Add ${need} more leg${need > 1 ? 's' : ''} with live lines to calculate</div>
+                </div>`;
         }
     }
 
