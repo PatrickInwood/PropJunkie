@@ -1143,6 +1143,24 @@
         const matchup = selectedHomeTeam && selectedAwayTeam
             ? `${selectedAwayTeam} @ ${selectedHomeTeam} · ` : '';
 
+        // Odds display
+        const fmtOdds = v => v == null ? '—' : (v > 0 ? '+' + v : String(v));
+        const overOdds  = fmtOdds(data.over_odds);
+        const underOdds = fmtOdds(data.under_odds);
+        const overCls   = data.over_odds  != null && data.over_odds  > 0 ? 'val-pos' : '';
+        const underCls  = data.under_odds != null && data.under_odds > 0 ? 'val-pos' : '';
+
+        // Fair single-leg implied odds (no-vig)
+        let fairOverStr = '—', fairUnderStr = '—';
+        if (!noLines && data.implied_prob_over_pct != null) {
+            const p = data.implied_prob_over_pct / 100;
+            fairOverStr  = p >= 0.5 ? `-${Math.round((p/(1-p))*100)}` : `+${Math.round(((1-p)/p)*100)}`;
+            const q = data.implied_prob_under_pct / 100;
+            fairUnderStr = q >= 0.5 ? `-${Math.round((q/(1-q))*100)}` : `+${Math.round(((1-q)/q)*100)}`;
+        }
+
+        const bookLabel = data.best_book ? `via ${data.best_book}` : '';
+
         content.innerHTML = `
             <div class="result-header">
                 <div>
@@ -1179,6 +1197,28 @@
                     </div>
                 </div>
             </div>
+
+            ${!noLines ? `
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border);background:var(--surface2);">
+                <div class="stat-item" style="background:transparent;">
+                    <div class="stat-label">Over Odds</div>
+                    <div class="stat-value ${overCls}" style="font-size:16px;">${overOdds}</div>
+                </div>
+                <div class="stat-item" style="background:transparent;">
+                    <div class="stat-label">Under Odds</div>
+                    <div class="stat-value ${underCls}" style="font-size:16px;">${underOdds}</div>
+                </div>
+                <div class="stat-item" style="background:transparent;">
+                    <div class="stat-label">Fair Over</div>
+                    <div class="stat-value" style="font-size:16px;color:var(--muted);">${fairOverStr}</div>
+                </div>
+                <div class="stat-item" style="background:transparent;">
+                    <div class="stat-label">Fair Under</div>
+                    <div class="stat-value" style="font-size:16px;color:var(--muted);">${fairUnderStr}</div>
+                </div>
+            </div>
+            ${bookLabel ? `<div style="padding:6px 22px;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600;letter-spacing:0.5px;">SOURCE: ${bookLabel.toUpperCase()}</div>` : ''}
+            ` : ''}
 
             ${data.claude_take ? `
             <div class="claude-take">
