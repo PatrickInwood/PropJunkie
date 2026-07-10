@@ -710,6 +710,11 @@
         .my-edge-num { font-size: 14px; font-weight: 800; min-width: 70px; }
         .my-edge-rec { font-size: 11px; font-weight: 700; margin-left: auto; }
         .my-edge-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+        .my-edge-sep { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+        .my-edge-note {
+            font-size: 10px; color: var(--muted); margin-top: 6px;
+            padding: 0 4px; font-style: italic;
+        }
 
         /* Light mode overrides for new elements */
         html[data-theme="light"] .my-odds-section { background: #f4f6f0; }
@@ -1373,8 +1378,61 @@
         return `<img class="team-logo-sm" src="${url}" width="${size}" height="${size}" alt="" onerror="this.style.display='none'">`;
     }
 
-    // ── My sportsbook odds edge calculator ───────────────────────────
+    // ── Statistical distributions for alternate line analysis ────────
+    const STAT_DIST = {
+        player_pass_tds:'poisson', player_pitcher_strikeouts:'poisson',
+        player_pitcher_hits_allowed:'poisson', player_batter_home_runs:'poisson',
+        player_batter_hits:'poisson', player_batter_rbis:'poisson',
+        player_batter_stolen_bases:'poisson', player_goals:'poisson',
+        player_threes:'poisson', player_blocks:'poisson', player_steals:'poisson',
+        player_pass_yds:'normal', player_rush_yds:'normal', player_reception_yds:'normal',
+        player_receptions:'normal', player_points:'normal', player_rebounds:'normal',
+        player_assists:'normal', player_shots_on_goal:'normal',
+        player_batter_total_bases:'normal', player_batter_runs_scored:'normal',
+        player_pitcher_outs:'normal', player_points_rebounds_assists:'normal',
+    };
+    const STAT_CV = {
+        player_pass_yds:0.32, player_rush_yds:0.55, player_reception_yds:0.55,
+        player_receptions:0.45, player_points:0.38, player_rebounds:0.45,
+        player_assists:0.50, player_shots_on_goal:0.52,
+        player_batter_total_bases:0.65, player_batter_runs_scored:0.80,
+        player_pitcher_outs:0.25, player_points_rebounds_assists:0.33,
+    };
+    function poissonCDF(lambda, k) {
+        if (lambda <= 0) return 1;
+        let cdf = 0, term = Math.exp(-lambda);
+        for (let i = 0; i <= Math.floor(k); i++) { cdf += term; term *= lambda / (i + 1); }
+        return Math.min(cdf, 1);
+    }
+    function erfApprox(x) {
+        const sign = x < 0 ? -1 : 1; const ax = Math.abs(x);
+        const t = 1/(1 + 0.3275911*ax);
+        const y = 1 - ((((1.061405429*t-1.453152027)*t+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-ax*ax);
+        return sign * y;
+    }
+    function normalCDF(x, mu, sigma) {
+        if (sigma <= 0) return x >= mu ? 1 : 0;
+        return 0.5 * (1 + erfApprox((x - mu) / (sigma * Math.SQRT2)));
+    }
+    function probOverLine(market, projection, line) {
+        if (!projection || projection <= 0) return 0.5;
+        const dist = STAT_DIST[market];
+        if (dist === 'poisson') {
+            // P(X > line) for Poisson(λ=projection). For .5 lines: P(X>1.5)=P(X≥2)=1-P(X≤1)
+            return 1 - poissonCDF(projection, Math.floor(line));
+        } else if (dist === 'normal') {
+            const cv = STAT_CV[market] || 0.40;
+            return 1 - normalCDF(line, projection, Math.max(projection * cv, 1));
+        } else {
+            // Sigmoid fallback
+            const spread = Math.max(projection * 0.25, 0.5);
+            return Math.max(0.05, Math.min(0.95, 0.5 + 0.35 * Math.tanh((projection - line) / spread)));
+        }
+    }
+
+    // ── My sportsbook edge calculator ────────────────────────────────
     function calcMyEdge() {
+        const lineStr  = (document.getElementById('myLine')?.value  || '').trim();
         const overStr  = (document.getElementById('myOverOdds')?.value  || '').trim();
         const underStr = (document.getElementById('myUnderOdds')?.value || '').trim();
         const el = document.getElementById('myEdgeResult');
@@ -1388,28 +1446,80 @@
         const overProb  = toProb(overStr);
         const underProb = toProb(underStr);
         if (!overProb && !underProb) {
-            el.innerHTML = '<div class="my-edge-empty">Enter at least one odds line above ↑</div>';
+            el.innerHTML = '<div class="my-edge-empty">Enter at least one odds line ↑</div>';
             return;
         }
 
-        const modelP = lastResult
-            ? (lastResult.model_prob_over_pct != null ? lastResult.model_prob_over_pct / 100
-               : lastResult.hit_probability   != null ? lastResult.hit_probability       : null)
-            : null;
+        const projVal   = parseFloat(document.getElementById('projection')?.value || '0');
+        const marketKey = document.getElementById('market').value;
+        const userLine  = lineStr ? parseFloat(lineStr) : null;
+        const effectiveLine = userLine ?? (lastResult?.line ?? projVal);
+        const lineFmt   = effectiveLine % 1 === 0 ? String(effectiveLine) : effectiveLine.toFixed(1);
 
+        // Model probability of hitting Over the effective line
+        const modelOverProb = probOverLine(marketKey, projVal, effectiveLine);
+
+        // Update Market Line stat cell if custom line entered
+        if (userLine != null) {
+            const mlEl  = document.getElementById('statMarketLine');
+            const mlSub = document.getElementById('statMarketLineSub');
+            if (mlEl)  { mlEl.textContent = lineFmt; mlEl.style.color = 'var(--accent)'; mlEl.style.fontSize = ''; }
+            if (mlSub) { mlSub.textContent = 'Custom line'; mlSub.style.color = 'var(--accent)'; }
+        }
+
+        // Build result rows
         let html = '<div class="my-edge-rows">';
         const row = (side, bookProb, modelSideProb) => {
-            const imp = (bookProb * 100).toFixed(1);
-            if (modelSideProb == null) {
-                return `<div class="my-edge-row"><span class="my-edge-side">${side}</span><span class="my-edge-implied">${imp}% implied</span><span class="my-edge-rec" style="color:var(--muted);">Edge calc needs live line</span></div>`;
-            }
-            const edge = ((modelSideProb - bookProb) * 100).toFixed(1);
-            const cls  = edge > 3 ? 'val-pos' : edge < -3 ? 'val-neg' : '';
-            const rec  = edge > 3 ? '✓ Value Bet' : edge < -3 ? '✗ Skip' : '→ Neutral';
-            return `<div class="my-edge-row"><span class="my-edge-side">${side}</span><span class="my-edge-implied">${imp}% implied</span><span class="my-edge-num ${cls}">${edge > 0 ? '+' : ''}${edge}% edge</span><span class="my-edge-rec ${cls}">${rec}</span></div>`;
+            const mdlPct  = (modelSideProb * 100).toFixed(1);
+            const impPct  = (bookProb * 100).toFixed(1);
+            const edge    = ((modelSideProb - bookProb) * 100);
+            const edgeFmt = (edge >= 0 ? '+' : '') + edge.toFixed(1) + '%';
+            const cls     = edge > 3 ? 'val-pos' : edge < -3 ? 'val-neg' : '';
+            const rec     = edge > 3 ? '✓ Value Bet' : edge < -3 ? '✗ Skip' : '→ Neutral';
+            return `<div class="my-edge-row">
+                <span class="my-edge-side">${side} ${lineFmt}</span>
+                <span class="my-edge-implied">Model ~${mdlPct}%</span>
+                <span class="my-edge-sep">vs</span>
+                <span class="my-edge-implied">Book ${impPct}%</span>
+                <span class="my-edge-num ${cls}">${edgeFmt}</span>
+                <span class="my-edge-rec ${cls}">${rec}</span>
+            </div>`;
         };
-        if (overProb  != null) html += row('Over',  overProb,  modelP);
-        if (underProb != null) html += row('Under', underProb, modelP != null ? 1 - modelP : null);
+
+        if (overProb  != null) {
+            html += row('Over',  overProb,  modelOverProb);
+            // Update Edge stat with over edge
+            const edgeEl = document.getElementById('statEdge');
+            if (edgeEl) {
+                const edge = (modelOverProb - overProb) * 100;
+                edgeEl.textContent = (edge >= 0 ? '+' : '') + edge.toFixed(1) + '%';
+                edgeEl.className = 'stat-value ' + (edge > 3 ? 'val-pos' : edge < -3 ? 'val-neg' : '');
+                edgeEl.style.color = '';
+            }
+            // Update verdict badge
+            const badgeEl = document.getElementById('statVerdictBadge');
+            if (badgeEl) {
+                const edge = (modelOverProb - overProb) * 100;
+                if      (edge > 5)  { badgeEl.className = 'verdict-badge v-over';  badgeEl.textContent = 'Over ✓'; }
+                else if (edge > 2)  { badgeEl.className = 'verdict-badge v-lean';  badgeEl.textContent = 'Lean Over'; }
+                else if (edge < -5) { badgeEl.className = 'verdict-badge v-under'; badgeEl.textContent = 'Under ✓'; }
+                else if (edge < -2) { badgeEl.className = 'verdict-badge v-lean';  badgeEl.textContent = 'Lean Under'; }
+                else                { badgeEl.className = 'verdict-badge v-pass';  badgeEl.textContent = 'Pass'; }
+            }
+            // Update hit probability
+            const probEl = document.getElementById('probVal');
+            if (probEl) {
+                const pct = Math.round(modelOverProb * 100);
+                probEl.className = `prob-value ${pct >= 60 ? 'prob-high' : pct >= 45 ? 'prob-mid' : 'prob-low'}`;
+                countUp(probEl, pct, 500, '%');
+                const lblEl = document.getElementById('probLabel');
+                if (lblEl) lblEl.textContent = 'Hit Probability';
+            }
+        }
+        if (underProb != null) html += row('Under', underProb, 1 - modelOverProb);
+
+        const distType = STAT_DIST[marketKey] || 'estimate';
+        html += `<div class="my-edge-note">Est. via ${distType === 'poisson' ? 'Poisson' : distType === 'normal' ? 'Normal' : 'sigmoid'} distribution · projection ${projVal}${userLine != null ? ' · custom line' : ''}</div>`;
         html += '</div>';
         el.innerHTML = html;
     }
@@ -1495,10 +1605,10 @@
                     <div class="market-label">${escHtml(mktLabel)} · ${data.line != null ? 'Line: ' + data.line : 'No live line yet'}</div>
                 </div>
                 <div class="result-right">
-                    <div class="verdict-badge ${vClass}">${vText}</div>
+                    <div class="verdict-badge ${vClass}" id="statVerdictBadge">${vText}</div>
                     <div class="hit-prob">
-                        <div class="prob-value ${prob != null ? probCls : (noLines ? '' : '')}" id="probVal">${prob != null ? '0%' : (noLines ? 'Proj' : '—')}</div>
-                        <div class="prob-label">${noLines ? 'No Live Line' : 'Hit Probability'}</div>
+                        <div class="prob-value ${prob != null ? probCls : ''}" id="probVal">${prob != null ? '0%' : (noLines ? 'Proj' : '—')}</div>
+                        <div class="prob-label" id="probLabel">${noLines ? 'No Live Line' : 'Hit Probability'}</div>
                     </div>
                 </div>
             </div>
@@ -1510,13 +1620,13 @@
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Market Line</div>
-                    <div class="stat-value" style="${noLines ? 'color:var(--muted);font-size:16px;' : ''}">${data.line ?? (noLines ? 'No Line' : '—')}</div>
-                    ${noLines ? `<div class="stat-sub">Needs live line</div>` : ''}
+                    <div class="stat-value" id="statMarketLine" style="${noLines ? 'color:var(--muted);font-size:16px;' : ''}">${data.line ?? (noLines ? 'No Line' : '—')}</div>
+                    <div class="stat-sub" id="statMarketLineSub" style="${noLines ? '' : 'display:none'}">${noLines ? 'Enter below ↓' : ''}</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Edge</div>
-                    <div class="stat-value ${edgeCls}" style="${noLines ? 'color:var(--muted);font-size:16px;' : ''}">${noLines ? 'No Line' : edgeDisplay}</div>
-                    ${noLines ? `<div class="stat-sub">Needs live line</div>` : ''}
+                    <div class="stat-value ${edgeCls}" id="statEdge" style="${noLines ? 'color:var(--muted);font-size:16px;' : ''}">${noLines ? 'No Line' : edgeDisplay}</div>
+                    ${noLines ? `<div class="stat-sub">Enter line below ↓</div>` : ''}
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Confidence</div>
@@ -1552,19 +1662,23 @@
 
             <div class="my-odds-section">
                 <div class="my-odds-header">
-                    <span class="my-odds-title">📊 Your Sportsbook Odds</span>
-                    <span class="my-odds-hint">American format · e.g. -115 or +130</span>
+                    <span class="my-odds-title">📊 Your Sportsbook Line</span>
+                    <span class="my-odds-hint">FanDuel, DraftKings, etc. — alternate lines supported</span>
                 </div>
                 <div class="my-odds-row">
                     <div class="my-odds-field">
-                        <label class="my-odds-label">Over</label>
-                        <input class="my-odds-input" id="myOverOdds" type="text" placeholder="-110" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
+                        <label class="my-odds-label">Line</label>
+                        <input class="my-odds-input" id="myLine" type="number" step="0.5" placeholder="${projection}" style="width:72px;" onkeydown="if(event.key==='Enter')calcMyEdge()">
                     </div>
                     <div class="my-odds-field">
-                        <label class="my-odds-label">Under</label>
-                        <input class="my-odds-input" id="myUnderOdds" type="text" placeholder="-110" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
+                        <label class="my-odds-label">Over Odds</label>
+                        <input class="my-odds-input" id="myOverOdds" type="text" placeholder="-115" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
                     </div>
-                    <button class="btn-calc" onclick="calcMyEdge()">Calculate Edge</button>
+                    <div class="my-odds-field">
+                        <label class="my-odds-label">Under Odds</label>
+                        <input class="my-odds-input" id="myUnderOdds" type="text" placeholder="-115" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
+                    </div>
+                    <button class="btn-calc" onclick="calcMyEdge()">Analyze →</button>
                 </div>
                 <div id="myEdgeResult" class="my-edge-result"></div>
             </div>
