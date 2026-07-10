@@ -563,6 +563,54 @@
 
         /* ── Empty ── */
         .empty { text-align: center; padding: 36px 20px; color: var(--muted); font-size: 13px; }
+
+        /* ── Mobile ── */
+        @media (max-width: 600px) {
+            body { overflow-x: hidden; }
+
+            header { padding: 0 14px; }
+            .badge { display: none; }
+            .t-opt { padding: 4px 8px; font-size: 9px; }
+
+            .container { padding: 14px 12px; }
+            .grid { gap: 12px; }
+
+            .card { padding: 16px; border-radius: 12px; }
+
+            .sport-tabs { gap: 5px; }
+            .tab { padding: 5px 10px; font-size: 10px; }
+
+            .game-list { max-height: 220px; }
+            .game-teams { font-size: 11px; }
+
+            /* 4-stat grid → 2×2 on mobile */
+            .result-stats { grid-template-columns: repeat(2, 1fr); }
+            .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
+            .stat-item:nth-child(odd) { border-right: 1px solid var(--border); }
+            .stat-item:nth-child(3),
+            .stat-item:nth-child(4) { border-bottom: none; }
+            .stat-value { font-size: 17px; }
+
+            /* Result header stacks on mobile */
+            .result-header { flex-direction: column; gap: 10px; }
+            .result-right { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+            .prob-value { font-size: 30px; }
+            .player-name { font-size: 18px; }
+
+            /* Parlay summary 3-col → single col */
+            .parlay-summary { grid-template-columns: repeat(3, 1fr); }
+            .p-value { font-size: 18px; }
+
+            /* Result actions wrap */
+            .result-actions { flex-wrap: wrap; gap: 8px; }
+            .action-group { width: 100%; justify-content: flex-end; }
+
+            .claude-take { padding: 14px 16px; }
+            .claude-text { font-size: 12px; }
+
+            .result-card { margin-top: 12px; }
+            .parlay-card { margin-top: 12px; }
+        }
     </style>
 </head>
 <body>
@@ -570,7 +618,7 @@
 <div class="toast" id="toast"></div>
 
 <header>
-    <a href="/" class="logo">Prop<span>Junkie</span></a>
+    <a href="/" class="logo"><span>Prop</span>Junkie</a>
     <div class="header-right">
         <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
             <div class="t-opt active" id="tDark">🌙 Dark</div>

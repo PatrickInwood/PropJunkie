@@ -33,7 +33,7 @@
         /* ── NAV ── */
         nav {
             border-bottom: 1px solid var(--border);
-            padding: 16px 40px;
+            padding: 14px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -47,6 +47,7 @@
         .nav-links { display: flex; align-items: center; gap: 32px; }
         .nav-links a { font-size: 14px; color: var(--muted); transition: color 0.15s; }
         .nav-links a:hover { color: var(--text); }
+        .nav-text-links { display: flex; align-items: center; gap: 28px; }
         .btn-nav {
             padding: 8px 20px;
             background: var(--accent);
@@ -55,10 +56,15 @@
             font-size: 14px;
             font-weight: 600;
             transition: all 0.15s;
+            white-space: nowrap;
         }
         .btn-nav:hover {
             background: var(--accent-hover);
             box-shadow: 0 0 20px var(--accent-glow);
+        }
+        @media (max-width: 600px) {
+            nav { padding: 14px 16px; }
+            .nav-text-links { display: none; }
         }
 
         /* ── HERO ── */
@@ -141,6 +147,11 @@
             max-width: 1000px;
             margin: 0 auto 80px;
             padding: 0 24px;
+        }
+        @media (max-width: 600px) {
+            .preview { padding: 0 16px; margin-bottom: 48px; }
+            .preview-inner { padding: 16px; gap: 12px; }
+            .preview-url { display: none; }
         }
         .preview-frame {
             background: var(--surface);
@@ -238,6 +249,7 @@
 
         /* ── SECTION WRAPPER ── */
         .section { max-width: 1100px; margin: 0 auto; padding: 80px 24px; }
+        @media (max-width: 600px) { .section { padding: 56px 16px; } }
         .section-label {
             font-size: 11px;
             font-weight: 700;
@@ -435,11 +447,13 @@
 
 <!-- NAV -->
 <nav>
-    <div class="logo">Prop<span>Junkie</span></div>
+    <div class="logo"><span>Prop</span>Junkie</div>
     <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="/lines">Live Lines</a>
-        <a href="#pricing">Pricing</a>
+        <div class="nav-text-links">
+            <a href="#features">Features</a>
+            <a href="/lines">Live Lines</a>
+            <a href="#pricing">Pricing</a>
+        </div>
         <a href="/app" class="btn-nav">Launch App →</a>
     </div>
 </nav>
@@ -631,7 +645,7 @@
 
 <!-- FOOTER -->
 <footer>
-    <div class="footer-logo">Prop<span>Junkie</span></div>
+    <div class="footer-logo"><span>Prop</span>Junkie</div>
     <div class="footer-copy">© 2026 PropJunkie. All rights reserved.</div>
     <div class="footer-links">
         <a href="#features">Features</a>
