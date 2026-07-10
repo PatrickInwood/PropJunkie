@@ -106,6 +106,37 @@ def get_events(sport_key: str) -> list:
     return resp.json()
 
 
+def get_game_scores(sport_key: str, days_from: int = 1) -> list:
+    """
+    Fetch live and recently completed scores from The Odds API.
+
+    Args:
+        sport_key: e.g. 'baseball_mlb'
+        days_from: include completed games from the last N days (0–3)
+
+    Returns:
+        List of game objects, each with:
+          - id, home_team, away_team, commence_time
+          - completed (bool)
+          - scores: [{"name": "Team Name", "score": "5"}, ...]
+          - last_update (ISO string, or null if not started)
+    """
+    url = f"{ODDS_API_BASE}/sports/{sport_key}/scores"
+    params = {
+        "apiKey":   ODDS_API_KEY,
+        "daysFrom": min(int(days_from), 3),
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code in (422, 404):
+            return []
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        print(f"[PropJunkie] Scores API error for {sport_key}: {e}")
+        return []
+
+
 def get_game_lines(sport_key: str) -> list:
     """
     Pull moneyline (h2h), spreads, and totals for upcoming games.

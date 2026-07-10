@@ -27,7 +27,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores
 
 # Load .env file when running locally
 load_dotenv()
@@ -78,6 +78,26 @@ def lines_page():
 @limiter.exempt
 def health():
     return jsonify({'status': 'ok', 'service': 'PropJunkie API'})
+
+
+# ─────────────────────────────────────────
+# LIVE SCORES
+# ─────────────────────────────────────────
+
+@app.route('/scores/<sport>', methods=['GET'])
+@limiter.limit("30 per minute")
+def game_scores(sport):
+    """
+    GET /scores/baseball_mlb?daysFrom=1
+    Returns live scores and recently completed game results.
+    daysFrom: 0 = today only, 1 = include yesterday (default), 3 = max
+    """
+    try:
+        days_from = int(request.args.get('daysFrom', 1))
+        data = get_game_scores(sport, days_from=days_from)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ─────────────────────────────────────────

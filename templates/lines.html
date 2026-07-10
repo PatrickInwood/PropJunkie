@@ -264,6 +264,37 @@
         .matchup-text { font-size: 15px; font-weight: 700; }
         .matchup-at { color: var(--muted); font-weight: 400; font-size: 13px; }
 
+        /* ── Live scores ── */
+        .score-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 11px; font-weight: 700;
+            padding: 3px 8px; border-radius: 5px; margin-bottom: 4px;
+        }
+        .score-badge.live {
+            background: rgba(239,68,68,0.12);
+            color: var(--red);
+            border: 1px solid rgba(239,68,68,0.25);
+        }
+        .score-badge.final {
+            background: var(--surface2);
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+        .live-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--red); flex-shrink: 0;
+            animation: pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%,100% { opacity:1; transform:scale(1); }
+            50%      { opacity:0.3; transform:scale(0.65); }
+        }
+        .score-nums { font-size: 13px; letter-spacing: 0.3px; }
+        .live-refresh-bar {
+            text-align: right; font-size: 10px; color: var(--muted);
+            padding: 8px 20px 2px; letter-spacing: 0.3px;
+        }
+
         /* ── Responsive ── */
         @media (max-width: 800px) {
             .lines-header { display: none; }
@@ -434,6 +465,38 @@
         return groups;
     }
 
+    // ── Live scores ──────────────────────────────────────────────────
+    let scoresMap = {};      // { gameId: scoreData }
+    let liveTimer = null;
+    let lastScoreTime = null;
+
+    async function loadScores(sport) {
+        try {
+            const res = await fetch(`/scores/${sport}?daysFrom=1`);
+            if (!res.ok) return;
+            const games = await res.json();
+            scoresMap = {};
+            for (const g of games) scoresMap[g.id] = g;
+            lastScoreTime = new Date();
+        } catch(e) { /* scores are optional */ }
+    }
+
+    function scoreBadge(gameId, home, away) {
+        const g = scoresMap[gameId];
+        if (!g || !g.scores || g.scores.length === 0) return '';
+        const hs = g.scores.find(s => s.name === home)?.score ?? '?';
+        const as = g.scores.find(s => s.name === away)?.score ?? '?';
+        const nums = `${as} – ${hs}`;
+        if (g.completed) {
+            return `<div class="score-badge final">FINAL &nbsp;·&nbsp; <span class="score-nums">${nums}</span></div>`;
+        }
+        return `<div class="score-badge live"><div class="live-dot"></div>LIVE &nbsp;·&nbsp; <span class="score-nums">${nums}</span></div>`;
+    }
+
+    function anyLive() {
+        return Object.values(scoresMap).some(g => g.scores?.length > 0 && !g.completed);
+    }
+
     function renderGame(g) {
         const home = g.home_team;
         const away = g.away_team;
@@ -468,7 +531,8 @@
                     <span class="matchup-text">${away} <span class="matchup-at">@</span> ${home}</span>
                     ${teamLogoImg(home)}
                 </div>
-                <div class="game-time">${time}</div>
+                ${scoreBadge(g.id, home, away)}
+                <div class="game-time" style="${scoresMap[g.id]?.scores?.length > 0 ? 'color:var(--muted);font-size:10px;' : ''}">${time}</div>
             </div>
 
             <div class="odds-cell">
@@ -513,29 +577,46 @@
         </div>`;
     }
 
+    function renderAll(games) {
+        const container = document.getElementById('linesContainer');
+        if (!Array.isArray(games) || games.length === 0) {
+            container.innerHTML = `<div class="empty-state">No upcoming ${SPORT_LABELS[selectedSport]} games found.<br>Check back when the season is active.</div>`;
+            return;
+        }
+        const groups = groupByDate(games);
+        let html = '';
+        for (const [label, groupGames] of Object.entries(groups)) {
+            html += `<div class="date-group"><div class="date-label">${label}</div>${groupGames.map(renderGame).join('')}</div>`;
+        }
+        if (anyLive() && lastScoreTime) {
+            const ts = lastScoreTime.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+            html += `<div class="live-refresh-bar">⚡ Live scores · updated ${ts} · auto-refreshes every 60s</div>`;
+        }
+        container.innerHTML = html;
+    }
+
     async function loadLines(sport) {
         const container = document.getElementById('linesContainer');
         container.innerHTML = '<div class="loading-state"><div class="spinner"></div>Loading lines…</div>';
+        if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
 
         try {
-            const res = await fetch(`${API}/game-lines/${sport}`);
+            // Lines + scores load in parallel
+            const [res] = await Promise.all([
+                fetch(`${API}/game-lines/${sport}`),
+                loadScores(sport),
+            ]);
             const games = await res.json();
+            renderAll(games);
 
-            if (!Array.isArray(games) || games.length === 0) {
-                container.innerHTML = `<div class="empty-state">No upcoming ${SPORT_LABELS[sport]} games found.<br>Check back when the season is active.</div>`;
-                return;
+            // Auto-refresh scores every 60s while live games are running
+            if (anyLive()) {
+                liveTimer = setInterval(async () => {
+                    await loadScores(sport);
+                    const r = await fetch(`${API}/game-lines/${sport}`);
+                    renderAll(await r.json());
+                }, 60000);
             }
-
-            const groups = groupByDate(games);
-            let html = '';
-            for (const [label, groupGames] of Object.entries(groups)) {
-                html += `<div class="date-group">
-                    <div class="date-label">${label}</div>
-                    ${groupGames.map(renderGame).join('')}
-                </div>`;
-            }
-            container.innerHTML = html;
-
         } catch(e) {
             container.innerHTML = `<div class="empty-state">Could not load lines. Check your Odds API key.</div>`;
         }
