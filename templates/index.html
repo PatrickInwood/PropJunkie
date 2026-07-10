@@ -825,6 +825,27 @@
         });
     });
 
+    // ── Time formatting (browser local timezone) ──────────────────────
+    function formatGameTime(utcString) {
+        if (!utcString) return 'TBD';
+        const d   = new Date(utcString);
+        if (isNaN(d.getTime())) return 'TBD';
+
+        const now      = new Date();
+        const todayStr = now.toDateString();
+        const gameStr  = d.toDateString();
+
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        const tomorrowStr = tomorrow.toDateString();
+
+        const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+        if (gameStr === todayStr)      return timeStr;
+        if (gameStr === tomorrowStr)   return `Tomorrow · ${timeStr}`;
+        return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${timeStr}`;
+    }
+
     // ── Game loading ──────────────────────────────────────────────────
     function showGameSkeleton() {
         document.getElementById('gameList').innerHTML = [65, 72, 58].map(w => `
@@ -850,13 +871,11 @@
                 const away = (g.away_team || 'Away').replace(/'/g, '&#39;');
                 const raw  = (g.home_team || '').replace(/'/g, "\\'");
                 const rawA = (g.away_team || '').replace(/'/g, "\\'");
-                const time = g.commence_time
-                    ? new Date(g.commence_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : '';
+                const timeLabel = formatGameTime(g.commence_time);
                 return `<div class="game-item" style="--idx:${idx}" data-id="${g.id}"
                              onclick="selectGame(this,'${g.id}','${raw}','${rawA}')">
                             <div class="game-teams">${away} @ ${home}</div>
-                            <div class="game-time">${time}</div>
+                            <div class="game-time">${timeLabel}</div>
                         </div>`;
             }).join('');
         } catch {
