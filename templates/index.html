@@ -1,69 +1,141 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PropJunkie — AI Prop Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* ── Theme Variables ── */
         :root {
-            --bg: #0c0f0a;
-            --surface: #141a12;
-            --surface2: #1a2218;
-            --border: #1e2a1a;
-            --accent: #c9a84c;
-            --accent-hover: #a8893a;
-            --accent-glow: rgba(201, 168, 76, 0.2);
-            --green: #10b981;
-            --green-glow: rgba(16, 185, 129, 0.15);
-            --red: #ef4444;
-            --yellow: #f59e0b;
-            --text: #e8ecf4;
-            --muted: #4a6a44;
+            --bg:           #0c0f0a;
+            --surface:      #141a12;
+            --surface2:     #1a2218;
+            --border:       #1e2a1a;
+            --accent:       #c9a84c;
+            --accent-hover: #dbb85c;
+            --accent-glow:  rgba(201, 168, 76, 0.15);
+            --green:        #10b981;
+            --green-dim:    rgba(16, 185, 129, 0.12);
+            --red:          #ef4444;
+            --red-dim:      rgba(239, 68, 68, 0.12);
+            --yellow:       #f59e0b;
+            --yellow-dim:   rgba(245, 158, 11, 0.12);
+            --text:         #e8ecf4;
+            --text-2:       #b8c8b6;
+            --muted:        #4a6a44;
+            --header-bg:    rgba(12, 15, 10, 0.95);
+        }
+
+        html[data-theme="light"] {
+            --bg:           #f4f0e8;
+            --surface:      #ffffff;
+            --surface2:     #ede9e0;
+            --border:       #d8d2c4;
+            --accent:       #a07c28;
+            --accent-hover: #886618;
+            --accent-glow:  rgba(160, 124, 40, 0.12);
+            --green:        #166c4a;
+            --green-dim:    rgba(22, 108, 74, 0.10);
+            --red:          #b52020;
+            --red-dim:      rgba(181, 32, 32, 0.10);
+            --yellow:       #9a5e08;
+            --yellow-dim:   rgba(154, 94, 8, 0.10);
+            --text:         #1a1a14;
+            --text-2:       #4a5040;
+            --muted:        #7a7255;
+            --header-bg:    rgba(244, 240, 232, 0.95);
         }
 
         body {
             background: var(--bg);
             color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             min-height: 100vh;
+            transition: background 0.25s ease, color 0.25s ease;
         }
+
+        /* ── Keyframes ── */
+        @keyframes slideInLeft  { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+        @keyframes slideUp      { from { opacity: 0; transform: translateY(14px);  } to { opacity: 1; transform: none; } }
+        @keyframes skPulse      { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes spin         { to { transform: rotate(360deg); } }
 
         /* ── Header ── */
         header {
             border-bottom: 1px solid var(--border);
-            padding: 16px 32px;
+            padding: 0 28px;
+            height: 56px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: var(--surface);
+            background: var(--header-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             position: sticky;
             top: 0;
-            z-index: 10;
+            z-index: 100;
+            transition: background 0.25s ease, border-color 0.25s ease;
         }
-        .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+        .logo {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: -0.8px;
+            color: var(--text);
+            text-decoration: none;
+            transition: color 0.25s ease;
+        }
         .logo span { color: var(--accent); }
+
+        .header-right { display: flex; align-items: center; gap: 14px; }
+
         .badge {
             background: var(--accent-glow);
             border: 1px solid var(--accent);
             color: var(--accent);
-            font-size: 10px;
-            font-weight: 700;
+            font-size: 9px;
+            font-weight: 800;
             padding: 3px 10px;
             border-radius: 20px;
-            letter-spacing: 1.5px;
+            letter-spacing: 2px;
             text-transform: uppercase;
         }
 
-        /* ── Layout ── */
-        .container { max-width: 1200px; margin: 0 auto; padding: 28px 20px; }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        /* ── Theme Toggle ── */
+        .theme-toggle {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 3px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            gap: 1px;
+            transition: border-color 0.15s;
+            user-select: none;
         }
+        .theme-toggle:hover { border-color: var(--accent); }
+        .t-opt {
+            padding: 4px 11px;
+            border-radius: 18px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--muted);
+            letter-spacing: 0.3px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .t-opt.active {
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        /* ── Layout ── */
+        .container { max-width: 1200px; margin: 0 auto; padding: 22px 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
 
         /* ── Cards ── */
@@ -71,15 +143,16 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 22px;
+            padding: 20px;
+            transition: background 0.25s ease, border-color 0.25s ease;
         }
         .card-title {
-            font-size: 11px;
-            font-weight: 700;
+            font-size: 9px;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
+            letter-spacing: 2px;
             color: var(--muted);
-            margin-bottom: 18px;
+            margin-bottom: 15px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -87,93 +160,107 @@
         .card-title::before {
             content: '';
             display: inline-block;
-            width: 3px; height: 13px;
+            width: 2px; height: 12px;
             background: var(--accent);
             border-radius: 2px;
         }
 
         /* ── Sport tabs ── */
-        .sport-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .sport-tabs { display: flex; gap: 6px; margin-bottom: 13px; flex-wrap: wrap; }
         .tab {
-            padding: 7px 14px;
+            padding: 6px 14px;
             border-radius: 8px;
             border: 1px solid var(--border);
             background: var(--surface2);
             color: var(--muted);
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
-            letter-spacing: 0.5px;
-            transition: all 0.15s;
+            letter-spacing: 0.3px;
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .tab:hover { border-color: var(--accent); color: var(--text); }
-        .tab.active {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: #fff;
-            box-shadow: 0 0 18px var(--accent-glow);
-        }
+        .tab.active { background: var(--accent); border-color: var(--accent); color: #0c0f0a; font-weight: 800; }
+        html[data-theme="light"] .tab.active { color: #fff; }
 
         /* ── Game list ── */
         .game-list {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            max-height: 340px;
+            gap: 6px;
+            max-height: 330px;
             overflow-y: auto;
-            padding-right: 4px;
+            padding-right: 2px;
         }
-        .game-list::-webkit-scrollbar { width: 4px; }
+        .game-list::-webkit-scrollbar { width: 3px; }
         .game-list::-webkit-scrollbar-track { background: transparent; }
-        .game-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        .game-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
         .game-item {
-            padding: 12px 14px;
+            padding: 11px 14px;
             border-radius: 10px;
             border: 1px solid var(--border);
             background: var(--surface2);
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+            animation-delay: calc(var(--idx, 0) * 0.05s);
         }
-        .game-item:hover { border-color: var(--accent); }
+        .game-item:hover { border-color: var(--accent); transform: translateX(3px); }
         .game-item.selected { border-color: var(--accent); background: var(--accent-glow); }
-        .game-teams { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
-        .game-time { font-size: 11px; color: var(--muted); }
+        .game-teams { font-size: 12px; font-weight: 700; margin-bottom: 3px; color: var(--text); }
+        .game-time { font-size: 10px; color: var(--muted); font-weight: 500; }
+
+        /* ── Skeletons ── */
+        .sk {
+            background: var(--surface2);
+            border-radius: 5px;
+            animation: skPulse 1.6s ease-in-out infinite;
+        }
+        .sk-game-item {
+            padding: 11px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            margin-bottom: 6px;
+        }
 
         /* ── Form ── */
-        .form-group { margin-bottom: 14px; }
+        .form-group { margin-bottom: 12px; }
         label {
             display: block;
-            font-size: 11px;
-            font-weight: 700;
+            font-size: 9px;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
+            letter-spacing: 1.5px;
             color: var(--muted);
-            margin-bottom: 7px;
+            margin-bottom: 6px;
         }
         input, select {
             width: 100%;
-            padding: 11px 14px;
+            padding: 10px 13px;
             background: var(--surface2);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 9px;
             color: var(--text);
-            font-size: 14px;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
             outline: none;
-            transition: border-color 0.15s, box-shadow 0.15s;
+            transition: border-color 0.15s, box-shadow 0.15s, background 0.25s ease;
+            -webkit-appearance: none;
+            appearance: none;
         }
         input:focus, select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-glow);
         }
-        select option { background: #1a1a26; }
-
-        /* Hide the browser's datalist dropdown arrow so it looks like a plain text input */
+        select option { background: var(--surface); color: var(--text); }
         input::-webkit-calendar-picker-indicator { display: none !important; }
         input[list]::-webkit-list-button { display: none !important; }
 
         /* ── Style tabs ── */
-        .style-tabs { display: flex; gap: 6px; }
+        .style-tabs { display: flex; gap: 5px; }
         .style-tab {
             flex: 1;
             padding: 8px 4px;
@@ -182,123 +269,315 @@
             background: var(--surface2);
             color: var(--muted);
             cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
             text-align: center;
-            transition: all 0.15s;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .style-tab.active {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-glow);
-        }
+        .style-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 
-        /* ── Button ── */
+        /* ── Primary button ── */
         .btn {
             width: 100%;
-            padding: 13px;
+            padding: 12px;
             background: var(--accent);
-            color: #fff;
+            color: #0c0f0a;
             border: none;
             border-radius: 10px;
-            font-size: 14px;
-            font-weight: 700;
+            font-size: 13px;
+            font-weight: 800;
+            font-family: 'Inter', sans-serif;
             cursor: pointer;
-            transition: all 0.15s;
-            letter-spacing: 0.5px;
-            margin-top: 6px;
+            letter-spacing: 0.3px;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .btn:hover:not(:disabled) {
-            background: var(--accent-hover);
-            box-shadow: 0 0 28px var(--accent-glow);
-            transform: translateY(-1px);
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn:active:not(:disabled) { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+        html[data-theme="light"] .btn { color: #fff; }
 
-        /* ── Results ── */
+        /* ── Result card ── */
         .result-card {
             display: none;
-            margin-top: 20px;
+            margin-top: 16px;
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
             overflow: hidden;
-            animation: fadeIn 0.3s ease;
+            transition: background 0.25s ease, border-color 0.25s ease;
         }
-        .result-card.show { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        .result-card.show {
+            display: block;
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
 
+        /* Result header */
         .result-header {
-            padding: 20px 22px;
+            padding: 18px 22px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
+            gap: 16px;
         }
-        .player-name { font-size: 20px; font-weight: 800; }
-        .market-label { font-size: 12px; color: var(--muted); margin-top: 3px; }
+        .player-name { font-size: 21px; font-weight: 900; letter-spacing: -0.6px; color: var(--text); }
+        .market-label { font-size: 11px; color: var(--muted); margin-top: 4px; font-weight: 500; line-height: 1.5; }
+
+        .result-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+
+        /* Verdict badge */
+        .verdict-badge {
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .v-over   { background: var(--green-dim);   color: var(--green);  border: 1px solid rgba(16,185,129,0.3); }
+        .v-under  { background: var(--red-dim);     color: var(--red);    border: 1px solid rgba(239,68,68,0.3); }
+        .v-lean   { background: var(--yellow-dim);  color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+        .v-pass   { background: var(--accent-glow); color: var(--accent); border: 1px solid rgba(201,168,76,0.3); }
+        .v-noline { background: var(--surface2);    color: var(--muted);  border: 1px solid var(--border); }
 
         .hit-prob { text-align: right; }
-        .prob-value { font-size: 40px; font-weight: 900; line-height: 1; }
-        .prob-label { font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: 0.5px; }
+        .prob-value { font-size: 38px; font-weight: 900; line-height: 1; letter-spacing: -2px; }
+        .prob-label { font-size: 9px; color: var(--muted); margin-top: 3px; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; }
         .prob-high { color: var(--green); }
         .prob-mid  { color: var(--yellow); }
         .prob-low  { color: var(--red); }
 
+        /* Stats row */
         .result-stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             border-bottom: 1px solid var(--border);
         }
         .stat-item {
-            padding: 14px 22px;
+            padding: 14px 18px;
             border-right: 1px solid var(--border);
         }
         .stat-item:last-child { border-right: none; }
-        .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 5px; }
-        .stat-value { font-size: 20px; font-weight: 800; }
-        .edge-pos { color: var(--green); }
-        .edge-neg { color: var(--red); }
+        .stat-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 5px; }
+        .stat-value { font-size: 20px; font-weight: 900; letter-spacing: -0.5px; color: var(--text); }
+        .val-pos { color: var(--green); }
+        .val-neg { color: var(--red); }
 
-        .claude-take { padding: 20px 22px; }
+        /* Confidence bar */
+        .conf-track {
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-top: 7px;
+            overflow: hidden;
+        }
+        .conf-fill {
+            height: 100%;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Claude's Take */
+        .claude-take {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+        }
         .claude-label {
-            font-size: 10px;
-            font-weight: 700;
+            font-size: 9px;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
+            letter-spacing: 2px;
             color: var(--accent);
             margin-bottom: 10px;
             display: flex;
             align-items: center;
             gap: 6px;
         }
-        .claude-label::before { content: '✦'; font-size: 9px; }
-        .claude-text { font-size: 14px; line-height: 1.75; color: var(--text); }
+        .claude-label::before { content: '✦'; font-size: 8px; }
+        .claude-text { font-size: 13px; line-height: 1.85; color: var(--text-2); font-weight: 400; }
 
-        /* ── Util ── */
-        .loading {
-            text-align: center;
-            padding: 36px 20px;
+        /* Result actions */
+        .result-actions {
+            padding: 12px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .action-group { display: flex; gap: 7px; }
+
+        .btn-ghost {
+            background: none;
+            border: 1px solid var(--border);
             color: var(--muted);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+            letter-spacing: 0.3px;
+        }
+        .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-ghost:active { transform: scale(0.96); }
+
+        .btn-parlay {
+            background: var(--accent-glow);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 7px 15px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 800;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            letter-spacing: 0.3px;
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-parlay:hover { background: var(--accent); color: #0c0f0a; }
+        .btn-parlay:active { transform: scale(0.96); }
+        html[data-theme="light"] .btn-parlay:hover { color: #fff; }
+
+        /* ── Parlay Builder card ── */
+        .parlay-card {
+            display: none;
+            margin-top: 16px;
+            background: var(--surface);
+            border: 1px solid var(--accent);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: background 0.25s ease;
+        }
+        .parlay-card.show {
+            display: block;
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .parlay-header {
+            padding: 13px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .parlay-title {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+        }
+        .btn-clear {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 4px 12px;
+            border-radius: 7px;
+            font-size: 10px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-clear:hover { border-color: var(--red); color: var(--red); }
+
+        .parlay-legs { padding: 12px 20px; display: flex; flex-direction: column; gap: 7px; }
+
+        .parlay-leg {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            padding: 9px 13px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .leg-player { font-size: 12px; font-weight: 700; color: var(--text); }
+        .leg-detail { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 500; }
+        .leg-side { color: var(--accent); font-weight: 800; }
+        .btn-remove {
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
             font-size: 13px;
+            padding: 3px 7px;
+            border-radius: 5px;
+            line-height: 1;
+            transition: all 0.12s;
+            flex-shrink: 0;
         }
-        .spinner {
-            width: 28px; height: 28px;
-            border: 3px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-            margin: 0 auto 14px;
+        .btn-remove:hover { color: var(--red); background: var(--red-dim); }
+
+        .parlay-summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            border-top: 1px solid var(--border);
+            background: var(--border);
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .p-stat {
+            padding: 14px 18px;
+            background: var(--surface);
+        }
+        .p-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 4px; }
+        .p-value { font-size: 22px; font-weight: 900; color: var(--accent); letter-spacing: -0.5px; }
+        .p-sub { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 500; }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(12px);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 999;
+            white-space: nowrap;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ── Empty ── */
         .empty { text-align: center; padding: 36px 20px; color: var(--muted); font-size: 13px; }
     </style>
 </head>
 <body>
 
+<div class="toast" id="toast"></div>
+
 <header>
-    <a href="/" class="logo" style="text-decoration:none;">Prop<span>Junkie</span></a>
-    <div class="badge">AI Powered</div>
+    <a href="/" class="logo">Prop<span>Junkie</span></a>
+    <div class="header-right">
+        <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
+            <div class="t-opt active" id="tDark">🌙 Dark</div>
+            <div class="t-opt" id="tLight">☀️ Light</div>
+        </div>
+        <div class="badge">AI Powered</div>
+    </div>
 </header>
 
 <div class="container">
@@ -313,9 +592,7 @@
                 <div class="tab" data-sport="baseball_mlb">MLB</div>
                 <div class="tab" data-sport="icehockey_nhl">NHL</div>
             </div>
-            <div class="game-list" id="gameList">
-                <div class="loading"><div class="spinner"></div>Loading games…</div>
-            </div>
+            <div class="game-list" id="gameList"></div>
         </div>
 
         <!-- PROP ANALYZER -->
@@ -348,69 +625,88 @@
                 </div>
             </div>
 
-            <button class="btn" id="analyzeBtn" onclick="analyzeProp()">Analyze Prop</button>
+            <button class="btn" id="analyzeBtn" onclick="analyzeProp()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Analyze Prop
+            </button>
         </div>
     </div>
 
-    <!-- RESULTS -->
+    <!-- RESULT CARD -->
     <div class="result-card" id="resultCard">
         <div id="resultContent"></div>
-        <div style="padding: 0 22px 18px; text-align: right;">
-            <button onclick="analyzeProp()" style="
-                background: none;
-                border: 1px solid var(--border);
-                color: var(--muted);
-                padding: 6px 16px;
-                border-radius: 8px;
-                font-size: 12px;
-                cursor: pointer;
-                letter-spacing: 0.5px;
-                transition: all 0.2s;
-            " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-               onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-                ↺ Refresh Lines
-            </button>
+    </div>
+
+    <!-- PARLAY BUILDER -->
+    <div class="parlay-card" id="parlayCard">
+        <div class="parlay-header">
+            <div class="parlay-title">⚡ Parlay Builder</div>
+            <button class="btn-clear" onclick="clearParlay()">Clear All</button>
         </div>
+        <div class="parlay-legs" id="parlayLegs"></div>
+        <div class="parlay-summary" id="parlaySummary"></div>
     </div>
 </div>
 
 <script>
-    const API = '';   // empty = same origin (Flask serves this page)
-    let selectedEventId = null;
-    let selectedSport = 'basketball_nba';
-    let selectedStyle = 'sharp';
-    let selectedHomeTeam = null;
-    let selectedAwayTeam = null;
+    const API = '';
+    let selectedEventId   = null;
+    let selectedSport     = 'basketball_nba';
+    let selectedStyle     = 'sharp';
+    let selectedHomeTeam  = null;
+    let selectedAwayTeam  = null;
+    let lastResult        = null;
+    let parlayLegs        = [];
+    let toastTimer        = null;
 
-    // ── Sport-specific markets ──────────────────────────────────────
+    // ── Theme ─────────────────────────────────────────────────────────
+    function toggleTheme() {
+        const html  = document.documentElement;
+        const isDark = html.getAttribute('data-theme') !== 'light';
+        const next   = isDark ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('pj-theme', next);
+        updateToggleUI(next);
+    }
+    function updateToggleUI(theme) {
+        document.getElementById('tDark').classList.toggle('active', theme === 'dark');
+        document.getElementById('tLight').classList.toggle('active', theme === 'light');
+    }
+    (function initTheme() {
+        const saved = localStorage.getItem('pj-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+        updateToggleUI(saved);
+    })();
+
+    // ── Markets ───────────────────────────────────────────────────────
     const SPORT_MARKETS = {
         basketball_nba: [
-            { value: 'player_points',   label: 'Points' },
-            { value: 'player_rebounds', label: 'Rebounds' },
-            { value: 'player_assists',  label: 'Assists' },
-            { value: 'player_threes',   label: '3-Pointers Made' },
-            { value: 'player_blocks',   label: 'Blocks' },
-            { value: 'player_steals',   label: 'Steals' },
-            { value: 'player_points_rebounds_assists', label: 'Pts + Reb + Ast' },
+            { value: 'player_points',                    label: 'Points' },
+            { value: 'player_rebounds',                  label: 'Rebounds' },
+            { value: 'player_assists',                   label: 'Assists' },
+            { value: 'player_threes',                    label: '3-Pointers Made' },
+            { value: 'player_blocks',                    label: 'Blocks' },
+            { value: 'player_steals',                    label: 'Steals' },
+            { value: 'player_points_rebounds_assists',   label: 'Pts + Reb + Ast' },
         ],
         americanfootball_nfl: [
-            { value: 'player_pass_yds',       label: 'Pass Yards' },
-            { value: 'player_pass_tds',       label: 'Pass TDs' },
-            { value: 'player_rush_yds',       label: 'Rush Yards' },
-            { value: 'player_reception_yds',  label: 'Receiving Yards' },
-            { value: 'player_receptions',     label: 'Receptions' },
-            { value: 'player_anytime_td',     label: 'Anytime TD' },
+            { value: 'player_pass_yds',      label: 'Pass Yards' },
+            { value: 'player_pass_tds',      label: 'Pass TDs' },
+            { value: 'player_rush_yds',      label: 'Rush Yards' },
+            { value: 'player_reception_yds', label: 'Receiving Yards' },
+            { value: 'player_receptions',    label: 'Receptions' },
+            { value: 'player_anytime_td',    label: 'Anytime TD' },
         ],
         baseball_mlb: [
-            { value: 'player_pitcher_strikeouts', label: 'Pitcher Strikeouts' },
-            { value: 'player_pitcher_outs',       label: 'Pitcher Outs' },
+            { value: 'player_pitcher_strikeouts',   label: 'Pitcher Strikeouts' },
+            { value: 'player_pitcher_outs',         label: 'Pitcher Outs' },
             { value: 'player_pitcher_hits_allowed', label: 'Hits Allowed' },
-            { value: 'player_batter_home_runs',   label: 'Home Runs' },
-            { value: 'player_batter_hits',        label: 'Hits' },
-            { value: 'player_batter_total_bases', label: 'Total Bases' },
-            { value: 'player_batter_rbis',        label: 'RBIs' },
-            { value: 'player_batter_runs_scored', label: 'Runs Scored' },
-            { value: 'player_batter_stolen_bases', label: 'Stolen Bases' },
+            { value: 'player_batter_home_runs',     label: 'Home Runs' },
+            { value: 'player_batter_hits',          label: 'Hits' },
+            { value: 'player_batter_total_bases',   label: 'Total Bases' },
+            { value: 'player_batter_rbis',          label: 'RBIs' },
+            { value: 'player_batter_runs_scored',   label: 'Runs Scored' },
+            { value: 'player_batter_stolen_bases',  label: 'Stolen Bases' },
         ],
         icehockey_nhl: [
             { value: 'player_shots_on_goal', label: 'Shots on Goal' },
@@ -420,7 +716,7 @@
         ],
     };
 
-    // ── Player autocomplete lists ───────────────────────────────────
+    // ── Players ───────────────────────────────────────────────────────
     const SPORT_PLAYERS = {
         basketball_nba: [
             'LeBron James','Stephen Curry','Kevin Durant','Giannis Antetokounmpo',
@@ -431,87 +727,65 @@
             'Paul George','Kawhi Leonard','Jimmy Butler','Anthony Edwards','Victor Wembanyama',
         ],
         americanfootball_nfl: [
-            // QBs
             'Patrick Mahomes','Josh Allen','Lamar Jackson','Joe Burrow','Jalen Hurts',
             'Justin Herbert','Dak Prescott','Tua Tagovailoa','Trevor Lawrence','Brock Purdy',
-            'Aaron Rodgers','Kyler Murray','Geno Smith','Sam Howell','Jordan Love',
-            'Anthony Richardson','Bryce Young','CJ Stroud','Will Levis','Deshaun Watson',
-            // WRs
+            'Aaron Rodgers','Kyler Murray','Geno Smith','Jordan Love','Anthony Richardson',
+            'Bryce Young','CJ Stroud','Will Levis','Sam Howell','Deshaun Watson',
             'Justin Jefferson','Tyreek Hill','Davante Adams','CeeDee Lamb','Stefon Diggs',
             'Ja\'Marr Chase','Cooper Kupp','Deebo Samuel','Amon-Ra St. Brown','DJ Moore',
             'Keenan Allen','Michael Pittman Jr.','George Pickens','Jaylen Waddle','Tee Higgins',
             'DeAndre Hopkins','Chris Godwin','Mike Evans','Puka Nacua','Rashee Rice',
-            // TEs
             'Travis Kelce','Mark Andrews','Sam LaPorta','Dallas Goedert','Kyle Pitts',
             'T.J. Hockenson','Dalton Kincaid','David Njoku','Jake Ferguson','Evan Engram',
-            // RBs
             'Christian McCaffrey','Derrick Henry','Bijan Robinson','Austin Ekeler',
             'Breece Hall','Josh Jacobs','Tony Pollard','Jahmyr Gibbs','De\'Von Achane',
             'Saquon Barkley','Nick Chubb','Jonathan Taylor','Rachaad White','Isiah Pacheco',
         ],
         baseball_mlb: [
-            // Dodgers
             'Shohei Ohtani','Mookie Betts','Freddie Freeman','Will Smith','Teoscar Hernandez',
             'Roki Sasaki','Yoshinobu Yamamoto','Tyler Glasnow','Walker Buehler','Clayton Kershaw',
             'James Paxton','Bobby Miller','Jack Flaherty','Ben Casparius',
-            // Padres
             'Fernando Tatis Jr.','Xander Bogaerts','Jake Cronenworth','Jurickson Profar',
-            'Dylan Cease','Michael King','Joe Musgrove','Randy Vasquez','Matt Waldron','Nick Pivetta',
-            // Yankees
+            'Dylan Cease','Michael King','Joe Musgrove','Randy Vasquez','Matt Waldron',
             'Aaron Judge','Juan Soto','Gerrit Cole','Carlos Rodon','Nestor Cortes','Clarke Schmidt',
             'Jazz Chisholm Jr.','Anthony Volpe','Paul Goldschmidt',
-            // Braves
             'Ronald Acuna Jr.','Ozzie Albies','Austin Riley','Spencer Strider','Max Fried',
             'Charlie Morton','Reynaldo Lopez','AJ Smith-Shawver',
-            // Cubs
             'Seiya Suzuki','Dansby Swanson','Ian Happ','Cody Bellinger',
-            'Justin Steele','Jameson Taillon','Kyle Hendricks','Matthew Boyd',
-            // Cardinals / Brewers
+            'Justin Steele','Jameson Taillon','Matthew Boyd',
             'Nolan Arenado','Brendan Donovan','Miles Mikolas','Sonny Gray',
             'Corbin Burnes','Freddy Peralta','Colin Rea','Frankie Montas',
-            // Mets / Phillies
             'Pete Alonso','Francisco Lindor','Mark Vientos',
-            'Zack Wheeler','Sean Manaea','Jose Quintana','Clay Holmes',
+            'Zack Wheeler','Sean Manaea','Jose Quintana',
             'Aaron Nola','Ranger Suarez','Bryce Harper','Trea Turner','Nick Castellanos',
-            // Orioles
             'Gunnar Henderson','Adley Rutschman','Colton Cowser','Ryan Mountcastle',
             'Dean Kremer','Kyle Bradish','Cole Irvin','Zach Eflin','Albert Suarez',
-            // Red Sox
             'Rafael Devers','Jarren Duran','Triston Casas','Garrett Crochet',
-            'Tanner Houck','Nick Pivetta','Brayan Bello',
-            // Rays / Blue Jays
+            'Tanner Houck','Brayan Bello',
             'Shane McClanahan','Zach Littell','Ryan Pepiot',
             'Vladimir Guerrero Jr.','Bo Bichette','Kevin Gausman','Chris Bassitt',
-            // White Sox
             'Sean Burke','Erick Fedde','Chris Flexen','Jonathan Cannon',
             'Andrew Vaughn','Lenyn Sosa','Gavin Sheets',
-            // Guardians / Tigers / Royals / Twins
             'Shane Bieber','Tanner Bibee','Logan Allen','Gavin Williams',
-            'Tarik Skubal','Jack Flaherty','Casey Mize','Reese Olson',
+            'Tarik Skubal','Casey Mize','Reese Olson',
             'Cole Ragans','Seth Lugo','Michael Wacha',
-            'Pablo Lopez','Bailey Ober','Joe Ryan','Chris Paddack',
-            // Astros / Rangers
+            'Pablo Lopez','Bailey Ober','Joe Ryan',
             'Yordan Alvarez','Jose Altuve','Framber Valdez','Hunter Brown','Ronel Blanco',
             'Corey Seager','Marcus Semien','Nathan Eovaldi','Cody Bradford',
-            // Athletics / Angels
-            'Paul Blackburn','JP Sears','Luis Severino',
+            'JP Sears','Luis Severino',
             'Mike Trout','Zach Neto','Tyler Anderson','Patrick Sandoval',
-            // Mariners
             'Julio Rodriguez','Cal Raleigh','Logan Gilbert','George Kirby','Luis Castillo',
             'Bryan Woo','Emerson Hancock',
-            // Giants / Rockies / Diamondbacks
-            'Logan Webb','Kyle Harrison','Robbie Ray',
+            'Logan Webb','Kyle Harrison',
             'Corbin Carroll','Ketel Marte','Zac Gallen','Merrill Kelly','Eduardo Rodriguez',
-            // Reds / Pirates / Nationals
             'Elly De La Cruz','Hunter Greene','Nick Lodolo','Graham Ashcraft',
             'Paul Skenes','Mitch Keller','Luis Ortiz',
-            'MacKenzie Gore','Patrick Corbin','Jake Irvin',
-            // Sandy Alcantara / Yu Darvish cross-team notables
+            'MacKenzie Gore','Jake Irvin',
             'Sandy Alcantara','Yu Darvish','Jose Berrios','Lance Lynn',
         ],
         icehockey_nhl: [
             'Connor McDavid','Nathan MacKinnon','Leon Draisaitl','Auston Matthews',
-            'David Pastrnak','Cale Makar','Roman Josi','Victor Hedman','Nicklas Backstrom',
+            'David Pastrnak','Cale Makar','Roman Josi','Victor Hedman',
             'Sidney Crosby','Alex Ovechkin','Elias Pettersson','Jack Hughes','Brady Tkachuk',
             'Matthew Tkachuk','Mitch Marner','William Nylander','Kirill Kaprizov','Igor Shesterkin',
         ],
@@ -519,16 +793,12 @@
 
     function updateMarketDropdown(sport) {
         const select = document.getElementById('market');
-        const markets = SPORT_MARKETS[sport] || [];
-        select.innerHTML = markets.map(m =>
-            `<option value="${m.value}">${m.label}</option>`
-        ).join('');
+        select.innerHTML = (SPORT_MARKETS[sport] || [])
+            .map(m => `<option value="${m.value}">${m.label}</option>`).join('');
     }
-
     function updatePlayerSuggestions(sport) {
-        const dl = document.getElementById('playerSuggestions');
-        const players = SPORT_PLAYERS[sport] || [];
-        dl.innerHTML = players.map(p => `<option value="${p}">`).join('');
+        document.getElementById('playerSuggestions').innerHTML =
+            (SPORT_PLAYERS[sport] || []).map(p => `<option value="${p}">`).join('');
     }
 
     // Sport tab clicks
@@ -536,8 +806,10 @@
         tab.addEventListener('click', () => {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            selectedSport = tab.dataset.sport;
-            selectedEventId = null;
+            selectedSport    = tab.dataset.sport;
+            selectedEventId  = null;
+            selectedHomeTeam = null;
+            selectedAwayTeam = null;
             updateMarketDropdown(selectedSport);
             updatePlayerSuggestions(selectedSport);
             loadGames(selectedSport);
@@ -553,43 +825,55 @@
         });
     });
 
-    async function loadGames(sport) {
-        const list = document.getElementById('gameList');
-        list.innerHTML = '<div class="loading"><div class="spinner"></div>Loading games…</div>';
+    // ── Game loading ──────────────────────────────────────────────────
+    function showGameSkeleton() {
+        document.getElementById('gameList').innerHTML = [65, 72, 58].map(w => `
+            <div class="sk-game-item">
+                <div class="sk" style="height:12px;width:${w}%;margin-bottom:7px;"></div>
+                <div class="sk" style="height:9px;width:${w - 25}%;"></div>
+            </div>`).join('');
+    }
 
+    async function loadGames(sport) {
+        showGameSkeleton();
         try {
-            const res = await fetch(`${API}/events/${sport}`);
+            const res   = await fetch(`${API}/events/${sport}`);
             const games = await res.json();
+            const list  = document.getElementById('gameList');
 
             if (!Array.isArray(games) || games.length === 0) {
-                list.innerHTML = '<div class="empty">No games scheduled today for this sport.</div>';
+                list.innerHTML = '<div class="empty">No games scheduled today.</div>';
                 return;
             }
-
-            list.innerHTML = games.map(g => {
-                const home = g.home_team || 'Home';
-                const away = g.away_team || 'Away';
-                const dt = g.commence_time ? new Date(g.commence_time) : null;
-                const time = dt ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                return `
-                    <div class="game-item" data-id="${g.id}" data-home="${home}" data-away="${away}" onclick="selectGame(this,'${g.id}','${home}','${away}')">
-                        <div class="game-teams">${away} @ ${home}</div>
-                        <div class="game-time">${time}</div>
-                    </div>`;
+            list.innerHTML = games.map((g, idx) => {
+                const home = (g.home_team || 'Home').replace(/'/g, '&#39;');
+                const away = (g.away_team || 'Away').replace(/'/g, '&#39;');
+                const raw  = (g.home_team || '').replace(/'/g, "\\'");
+                const rawA = (g.away_team || '').replace(/'/g, "\\'");
+                const time = g.commence_time
+                    ? new Date(g.commence_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : '';
+                return `<div class="game-item" style="--idx:${idx}" data-id="${g.id}"
+                             onclick="selectGame(this,'${g.id}','${raw}','${rawA}')">
+                            <div class="game-teams">${away} @ ${home}</div>
+                            <div class="game-time">${time}</div>
+                        </div>`;
             }).join('');
-        } catch (e) {
-            list.innerHTML = '<div class="empty">Could not load games. Check your Odds API key.</div>';
+        } catch {
+            document.getElementById('gameList').innerHTML =
+                '<div class="empty">Could not load games.</div>';
         }
     }
 
-    function selectGame(el, eventId, homeTeam, awayTeam) {
+    function selectGame(el, eventId, home, away) {
         document.querySelectorAll('.game-item').forEach(g => g.classList.remove('selected'));
         el.classList.add('selected');
-        selectedEventId = eventId;
-        selectedHomeTeam = homeTeam;
-        selectedAwayTeam = awayTeam;
+        selectedEventId  = eventId;
+        selectedHomeTeam = home;
+        selectedAwayTeam = away;
     }
 
+    // ── Analyze prop ──────────────────────────────────────────────────
     async function analyzeProp() {
         const player     = document.getElementById('playerName').value.trim();
         const projection = parseFloat(document.getElementById('projection').value);
@@ -598,105 +882,293 @@
         const card       = document.getElementById('resultCard');
         const content    = document.getElementById('resultContent');
 
-        if (!player)              { alert('Enter a player name.'); return; }
-        if (isNaN(projection))    { alert('Enter a projection value.'); return; }
-        if (!selectedEventId)     { alert('Select a game from the left panel first.'); return; }
+        if (!player)           { showToast('⚠ Enter a player name'); return; }
+        if (isNaN(projection)) { showToast('⚠ Enter a projection value'); return; }
+        if (!selectedEventId)  { showToast('⚠ Select a game first'); return; }
 
         btn.disabled = true;
-        btn.textContent = 'Analyzing…';
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 0.7s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.5-7.8L23 10"/></svg> Analyzing…`;
         card.classList.add('show');
-        content.innerHTML = '<div class="loading"><div class="spinner"></div>Running analysis…</div>';
+
+        // Skeleton while loading
+        content.innerHTML = `
+            <div style="padding:18px 22px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;">
+                <div><div class="sk" style="height:20px;width:160px;margin-bottom:8px;"></div><div class="sk" style="height:10px;width:220px;"></div></div>
+                <div><div class="sk" style="height:26px;width:80px;border-radius:20px;margin-bottom:6px;"></div><div class="sk" style="height:38px;width:65px;border-radius:6px;"></div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border);">
+                ${[1,2,3,4].map(i => `<div style="padding:14px 18px;border-right:${i<4?'1px solid var(--border)':'none'};">
+                    <div class="sk" style="height:9px;width:55%;margin-bottom:7px;"></div>
+                    <div class="sk" style="height:20px;width:40%;"></div>
+                </div>`).join('')}
+            </div>
+            <div style="padding:18px 22px;">
+                <div class="sk" style="height:9px;width:15%;margin-bottom:12px;"></div>
+                <div class="sk" style="height:11px;width:92%;margin-bottom:6px;"></div>
+                <div class="sk" style="height:11px;width:78%;margin-bottom:6px;"></div>
+                <div class="sk" style="height:11px;width:62%;"></div>
+            </div>`;
 
         try {
-            const res = await fetch(`${API}/analyze-prop`, {
+            const res  = await fetch(`${API}/analyze-prop`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     player, projection, market,
-                    sport: selectedSport,
-                    event_id: selectedEventId,
-                    style: selectedStyle,
-                    home_team: selectedHomeTeam,
-                    away_team: selectedAwayTeam,
+                    sport:      selectedSport,
+                    event_id:   selectedEventId,
+                    style:      selectedStyle,
+                    home_team:  selectedHomeTeam,
+                    away_team:  selectedAwayTeam,
                 })
             });
             const data = await res.json();
-
             if (data.error) {
-                content.innerHTML = `<div class="loading" style="color:var(--red)">⚠ ${data.error}</div>`;
+                content.innerHTML = `<div class="empty" style="color:var(--red)">⚠ ${data.error}</div>`;
                 return;
             }
-
-            const mktLabel = document.getElementById('market').selectedOptions[0].text;
-            const noLines  = data.no_lines === true;
-
-            // Stats row — show dashes when no live lines
-            const prob    = data.hit_probability != null ? Math.round(data.hit_probability * 100) : null;
-            const edgeRaw = data.edge != null ? (data.edge * 100) : null;
-            const edge    = edgeRaw != null ? edgeRaw.toFixed(1) : null;
-            const probCls = prob == null ? '' : prob >= 60 ? 'prob-high' : prob >= 45 ? 'prob-mid' : 'prob-low';
-            const edgeCls = edgeRaw != null && edgeRaw >= 0 ? 'edge-pos' : 'edge-neg';
-
-            const probDisplay = prob != null
-                ? `<div class="prob-value ${probCls}">${prob}%</div><div class="prob-label">Hit Probability</div>`
-                : `<div class="prob-value" style="font-size:18px;color:var(--muted)">No Line</div><div class="prob-label">Check back later</div>`;
-
-            content.innerHTML = `
-                <div class="result-header">
-                    <div>
-                        <div class="player-name">${player}</div>
-                        <div class="market-label">${mktLabel}${data.line != null ? ' · Line: ' + data.line : ' · No live line yet'}</div>
-                    </div>
-                    <div class="hit-prob">${probDisplay}</div>
-                </div>
-                <div class="result-stats">
-                    <div class="stat-item">
-                        <div class="stat-label">Projection</div>
-                        <div class="stat-value">${projection}</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Market Line</div>
-                        <div class="stat-value">${data.line ?? '—'}</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Edge</div>
-                        <div class="stat-value ${edgeCls}">
-                            ${edge != null ? (edgeRaw >= 0 ? '+' : '') + edge + '%' : '—'}
-                        </div>
-                    </div>
-                </div>
-                ${data.claude_take ? `
-                <div class="claude-take">
-                    <div class="claude-label">Claude's Take</div>
-                    <div class="claude-text">${mdToHtml(data.claude_take)}</div>
-                </div>` : ''}
-            `;
-        } catch(e) {
-            content.innerHTML = `<div class="loading" style="color:var(--red)">Network error — is the API running?</div>`;
+            lastResult = { ...data, player, projection, market };
+            renderResult(data, player, projection);
+        } catch {
+            content.innerHTML = `<div class="empty" style="color:var(--red)">Network error — is the API running?</div>`;
         } finally {
             btn.disabled = false;
-            btn.textContent = 'Analyze Prop';
+            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Analyze Prop`;
         }
     }
 
-    // ── Lightweight markdown → HTML renderer ──────────────────────
-    function mdToHtml(text) {
-        return text
-            // Headers → bold labels
-            .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
-            // Bold **text**
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            // Italic *text*
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            // Horizontal rule ---
-            .replace(/^---+$/gm, '<hr style="border-color:var(--border);margin:10px 0">')
-            // Double newline → paragraph break
-            .replace(/\n{2,}/g, '<br><br>')
-            // Single newline
-            .replace(/\n/g, '<br>');
+    // ── Render result ─────────────────────────────────────────────────
+    function renderResult(data, player, projection) {
+        const content  = document.getElementById('resultContent');
+        const mktLabel = document.getElementById('market').selectedOptions[0]?.text || '';
+        const noLines  = data.no_lines === true;
+        const rec      = data.recommendation || '';
+
+        // Probability — prefer model_prob_over_pct (live lines), fall back to hit_probability
+        const prob = noLines ? null
+            : data.model_prob_over_pct != null ? Math.round(data.model_prob_over_pct)
+            : data.hit_probability     != null ? Math.round(data.hit_probability * 100)
+            : null;
+
+        const probCls = prob == null ? '' : prob >= 60 ? 'prob-high' : prob >= 45 ? 'prob-mid' : 'prob-low';
+
+        // Edge — use dominant side based on recommendation
+        let edgeNum = null;
+        if (!noLines) {
+            if (rec.includes('UNDER') && data.edge_under_pct != null) edgeNum = data.edge_under_pct;
+            else if (data.edge_over_pct != null) edgeNum = data.edge_over_pct;
+        }
+        const edgeDisplay = edgeNum != null
+            ? (edgeNum >= 0 ? '+' : '') + Math.abs(edgeNum).toFixed(1) + '%'
+            : '—';
+        const edgeCls = edgeNum == null ? '' : edgeNum >= 0 ? 'val-pos' : 'val-neg';
+
+        // Verdict badge
+        let vClass = 'v-noline', vText = 'No Line';
+        if (!noLines) {
+            if      (rec.startsWith('OVER'))        { vClass = 'v-over';  vText = 'Over ✓'; }
+            else if (rec.startsWith('UNDER'))       { vClass = 'v-under'; vText = 'Under ✓'; }
+            else if (rec.includes('LEAN OVER'))     { vClass = 'v-lean';  vText = 'Lean Over'; }
+            else if (rec.includes('LEAN UNDER'))    { vClass = 'v-lean';  vText = 'Lean Under'; }
+            else                                    { vClass = 'v-pass';  vText = 'Pass'; }
+        }
+
+        // Confidence
+        const confPct   = prob;
+        const confText  = confPct == null ? '—' : confPct >= 60 ? 'High' : confPct >= 45 ? 'Med' : 'Low';
+        const confCls   = confPct == null ? '' : confPct >= 60 ? 'val-pos' : confPct >= 45 ? '' : 'val-neg';
+        const barColor  = confPct == null ? 'var(--muted)'
+            : confPct >= 60 ? 'var(--green)' : confPct >= 45 ? 'var(--yellow)' : 'var(--red)';
+
+        // Matchup
+        const matchup = selectedHomeTeam && selectedAwayTeam
+            ? `${selectedAwayTeam} @ ${selectedHomeTeam} · ` : '';
+
+        content.innerHTML = `
+            <div class="result-header">
+                <div>
+                    <div class="player-name">${escHtml(player)}</div>
+                    <div class="market-label">${escHtml(mktLabel)} · ${escHtml(matchup)}${data.line != null ? 'Line: ' + data.line : 'No live line yet'}</div>
+                </div>
+                <div class="result-right">
+                    <div class="verdict-badge ${vClass}">${vText}</div>
+                    <div class="hit-prob">
+                        <div class="prob-value ${probCls}" id="probVal">${prob != null ? '0%' : '—'}</div>
+                        <div class="prob-label">Hit Probability</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="result-stats">
+                <div class="stat-item">
+                    <div class="stat-label">Projection</div>
+                    <div class="stat-value">${projection}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Market Line</div>
+                    <div class="stat-value">${data.line ?? '—'}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Edge</div>
+                    <div class="stat-value ${edgeCls}">${edgeDisplay}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Confidence</div>
+                    <div class="stat-value ${confCls}" style="font-size:17px;">${confText}</div>
+                    <div class="conf-track">
+                        <div class="conf-fill" id="confBar" style="background:${barColor};"></div>
+                    </div>
+                </div>
+            </div>
+
+            ${data.claude_take ? `
+            <div class="claude-take">
+                <div class="claude-label">Claude's Take</div>
+                <div class="claude-text">${mdToHtml(data.claude_take)}</div>
+            </div>` : ''}
+
+            <div class="result-actions">
+                <button class="btn-parlay" onclick="addToParlay()">＋ Add to Parlay</button>
+                <div class="action-group">
+                    <button class="btn-ghost" onclick="analyzeProp()">↺ Refresh</button>
+                    <button class="btn-ghost" onclick="shareResult()">↗ Share</button>
+                </div>
+            </div>`;
+
+        // Count-up animation for probability
+        if (prob != null) countUp(document.getElementById('probVal'), prob, 900, '%');
+
+        // Confidence bar fill animation
+        setTimeout(() => {
+            const bar = document.getElementById('confBar');
+            if (bar && confPct != null) bar.style.width = confPct + '%';
+        }, 60);
     }
 
-    // Kick off on load
+    // ── Micro-interactions ────────────────────────────────────────────
+    function countUp(el, target, duration, suffix) {
+        const t0 = performance.now();
+        (function tick(now) {
+            const p = Math.min((now - t0) / duration, 1);
+            el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))) + suffix;
+            if (p < 1) requestAnimationFrame(tick);
+        })(t0);
+    }
+
+    // ── Parlay Builder ────────────────────────────────────────────────
+    function addToParlay() {
+        if (!lastResult) return;
+        const rec = lastResult.recommendation || '';
+        let side = 'No Line';
+        if      (rec.startsWith('OVER'))          side = 'Over';
+        else if (rec.startsWith('UNDER'))         side = 'Under';
+        else if (rec.includes('LEAN OVER'))       side = 'Lean Over';
+        else if (rec.includes('LEAN UNDER'))      side = 'Lean Under';
+        else if (rec === 'NO EDGE — PASS')        side = 'Pass';
+
+        const mktLabel = document.getElementById('market').selectedOptions[0]?.text || lastResult.market;
+        const prob = lastResult.model_prob_over_pct != null ? Math.round(lastResult.model_prob_over_pct)
+            : lastResult.hit_probability != null ? Math.round(lastResult.hit_probability * 100) : null;
+
+        parlayLegs.push({ id: Date.now(), player: lastResult.player, market: mktLabel, side, prob });
+        renderParlay();
+        showToast('✓ Added to parlay');
+    }
+
+    function removeLeg(id) {
+        parlayLegs = parlayLegs.filter(l => l.id !== id);
+        renderParlay();
+    }
+
+    function clearParlay() {
+        parlayLegs = [];
+        renderParlay();
+    }
+
+    function renderParlay() {
+        const card    = document.getElementById('parlayCard');
+        const legList = document.getElementById('parlayLegs');
+        const summary = document.getElementById('parlaySummary');
+
+        if (parlayLegs.length === 0) { card.classList.remove('show'); return; }
+        card.classList.add('show');
+
+        legList.innerHTML = parlayLegs.map(leg => `
+            <div class="parlay-leg">
+                <div>
+                    <div class="leg-player">${escHtml(leg.player)} — <span class="leg-side">${leg.side}</span></div>
+                    <div class="leg-detail">${escHtml(leg.market)}${leg.prob != null ? ' · ' + leg.prob + '% model prob' : ''}</div>
+                </div>
+                <button class="btn-remove" onclick="removeLeg(${leg.id})" aria-label="Remove leg">✕</button>
+            </div>`).join('');
+
+        const withProb = parlayLegs.filter(l => l.prob != null);
+        if (withProb.length >= 2) {
+            const combined = withProb.reduce((acc, l) => acc * (l.prob / 100), 1);
+            const pct      = (combined * 100).toFixed(1);
+            const odds     = combined >= 0.5
+                ? '-' + Math.round((combined / (1 - combined)) * 100)
+                : '+' + Math.round(((1 - combined) / combined) * 100);
+            summary.innerHTML = `
+                <div class="p-stat"><div class="p-label">Legs</div><div class="p-value">${parlayLegs.length}</div></div>
+                <div class="p-stat"><div class="p-label">Combined Prob</div><div class="p-value">${pct}%</div><div class="p-sub">Model estimate</div></div>
+                <div class="p-stat"><div class="p-label">Fair Odds</div><div class="p-value">${odds}</div><div class="p-sub">No-vig American</div></div>`;
+        } else {
+            const need = 2 - withProb.length;
+            summary.innerHTML = `
+                <div class="p-stat"><div class="p-label">Legs</div><div class="p-value">${parlayLegs.length}</div></div>
+                <div class="p-stat" style="grid-column:span 2;"><div class="p-label">Combined Odds</div>
+                <div class="p-sub" style="font-size:12px;margin-top:5px;">Add ${need} more leg${need > 1 ? 's' : ''} with live lines to see combined odds</div></div>`;
+        }
+    }
+
+    // ── Share ─────────────────────────────────────────────────────────
+    function shareResult() {
+        if (!lastResult) return;
+        const mkt  = document.getElementById('market').selectedOptions[0]?.text || lastResult.market;
+        const prob = lastResult.model_prob_over_pct != null ? Math.round(lastResult.model_prob_over_pct) + '%'
+            : lastResult.hit_probability != null ? Math.round(lastResult.hit_probability * 100) + '%' : 'No line';
+        const rec  = lastResult.recommendation || '—';
+        const line = lastResult.line ?? 'N/A';
+        const text =
+            `📊 PropJunkie Analysis\n` +
+            `${lastResult.player} — ${mkt}\n` +
+            `Projection: ${lastResult.projection}  |  Line: ${line}  |  Hit Prob: ${prob}\n` +
+            `Rec: ${rec}\n\n` +
+            `propjunkie-production.up.railway.app`;
+        navigator.clipboard.writeText(text)
+            .then(()  => showToast('✓ Copied to clipboard'))
+            .catch(()  => showToast('⚠ Copy failed'));
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+    }
+
+    // ── Markdown ──────────────────────────────────────────────────────
+    function mdToHtml(text) {
+        return text
+            .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+            .replace(/^---+$/gm,       '<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">')
+            .replace(/\n{2,}/g,        '<br><br>')
+            .replace(/\n/g,            '<br>');
+    }
+
+    // ── Utils ─────────────────────────────────────────────────────────
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────
     updateMarketDropdown(selectedSport);
     updatePlayerSuggestions(selectedSport);
     loadGames(selectedSport);
