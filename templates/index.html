@@ -93,6 +93,18 @@
 
         .header-right { display: flex; align-items: center; gap: 14px; }
 
+        .header-link {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            text-decoration: none;
+            letter-spacing: 0.3px;
+            transition: color 0.15s;
+            white-space: nowrap;
+        }
+        .header-link:hover { color: var(--accent); }
+        @media (max-width: 600px) { .header-link { display: none; } }
+
         .badge {
             background: var(--accent-glow);
             border: 1px solid var(--accent);
@@ -620,11 +632,12 @@
 <header>
     <a href="/" class="logo"><span>Prop</span>Junkie</a>
     <div class="header-right">
+        <a href="/lines" class="header-link">Live Lines</a>
+        <a href="#parlay" class="header-link" onclick="scrollToParlay(event)">Parlay Builder</a>
         <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
             <div class="t-opt active" id="tDark">🌙 Dark</div>
             <div class="t-opt" id="tLight">☀️ Light</div>
         </div>
-        <div class="badge">AI Powered</div>
     </div>
 </header>
 
@@ -686,7 +699,7 @@
     </div>
 
     <!-- PARLAY BUILDER -->
-    <div class="parlay-card" id="parlayCard">
+    <div class="parlay-card" id="parlayCard" data-anchor="parlay" style="scroll-margin-top: 70px;">
         <div class="parlay-header">
             <div class="parlay-title">⚡ Parlay Builder</div>
             <button class="btn-clear" onclick="clearParlay()">Clear All</button>
@@ -706,6 +719,17 @@
     let lastResult        = null;
     let parlayLegs        = [];
     let toastTimer        = null;
+
+    // ── Parlay scroll ─────────────────────────────────────────────────
+    function scrollToParlay(e) {
+        e.preventDefault();
+        const card = document.getElementById('parlayCard');
+        if (parlayLegs.length === 0) {
+            showToast('⚡ Add a prop analysis first, then use Add to Parlay');
+            return;
+        }
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     // ── Theme ─────────────────────────────────────────────────────────
     function toggleTheme() {
