@@ -637,6 +637,86 @@
         /* ── Empty ── */
         .empty { text-align: center; padding: 36px 20px; color: var(--muted); font-size: 13px; }
 
+        /* ── Team logos ── */
+        .team-logo-sm {
+            width: 22px; height: 22px;
+            object-fit: contain;
+            vertical-align: middle;
+            border-radius: 3px;
+        }
+        .matchup-logo-row {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--muted);
+            margin-bottom: 4px; flex-wrap: wrap;
+        }
+        .ml-team { font-weight: 600; color: var(--text); font-size: 11px; }
+        .ml-at { color: var(--muted); font-size: 10px; }
+
+        /* ── My Sportsbook Odds ── */
+        .my-odds-section {
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface2);
+        }
+        .my-odds-header {
+            display: flex; align-items: baseline; gap: 10px;
+            margin-bottom: 10px; flex-wrap: wrap;
+        }
+        .my-odds-title {
+            font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
+            text-transform: uppercase; color: var(--accent);
+        }
+        .my-odds-hint { font-size: 11px; color: var(--muted); }
+        .my-odds-row {
+            display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+        }
+        .my-odds-field { display: flex; flex-direction: column; gap: 4px; }
+        .my-odds-label {
+            font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .my-odds-input {
+            width: 90px; padding: 7px 10px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text);
+            font-size: 14px; font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.15s;
+            outline: none;
+        }
+        .my-odds-input:focus { border-color: var(--accent); }
+        .btn-calc {
+            padding: 8px 18px; background: var(--accent);
+            color: #fff; border: none; border-radius: 8px;
+            font-size: 12px; font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer; transition: background 0.15s; white-space: nowrap;
+        }
+        .btn-calc:hover { background: var(--accent-hover); }
+        .my-edge-result { margin-top: 10px; }
+        .my-edge-rows { display: flex; flex-direction: column; gap: 6px; }
+        .my-edge-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 12px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; flex-wrap: wrap;
+        }
+        .my-edge-side {
+            font-size: 11px; font-weight: 800;
+            text-transform: uppercase; color: var(--muted);
+            width: 40px; flex-shrink: 0;
+        }
+        .my-edge-implied { font-size: 12px; color: var(--muted); min-width: 90px; }
+        .my-edge-num { font-size: 14px; font-weight: 800; min-width: 70px; }
+        .my-edge-rec { font-size: 11px; font-weight: 700; margin-left: auto; }
+        .my-edge-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+
+        /* Light mode overrides for new elements */
+        html[data-theme="light"] .my-odds-section { background: #f4f6f0; }
+        html[data-theme="light"] .my-odds-input { background: #fff; border-color: #d0d8cc; color: #1a2218; }
+        html[data-theme="light"] .my-edge-row { background: #fff; border-color: #d0d8cc; }
+        html[data-theme="light"] .my-odds-input:focus { border-color: var(--accent); }
+
         /* ── Mobile ── */
         @media (max-width: 600px) {
             body { overflow-x: hidden; }
@@ -1227,6 +1307,113 @@
         return                                        { label: 'Aggressive', cls: 'val-pos',  sub: 'High-end projection'  };
     }
 
+    // ── Team logos (ESPN CDN) ─────────────────────────────────────────
+    const TEAM_ABBREVS = {
+        // MLB
+        "Atlanta Braves":"atl","Arizona Diamondbacks":"ari","Baltimore Orioles":"bal",
+        "Boston Red Sox":"bos","Chicago Cubs":"chc","Chicago White Sox":"cws",
+        "Cincinnati Reds":"cin","Cleveland Guardians":"cle","Colorado Rockies":"col",
+        "Detroit Tigers":"det","Houston Astros":"hou","Kansas City Royals":"kc",
+        "Los Angeles Angels":"laa","Los Angeles Dodgers":"lad","Miami Marlins":"mia",
+        "Milwaukee Brewers":"mil","Minnesota Twins":"min","New York Mets":"nym",
+        "New York Yankees":"nyy","Oakland Athletics":"oak","Athletics":"oak",
+        "Philadelphia Phillies":"phi","Pittsburgh Pirates":"pit","San Diego Padres":"sd",
+        "Seattle Mariners":"sea","San Francisco Giants":"sf","St. Louis Cardinals":"stl",
+        "Tampa Bay Rays":"tb","Texas Rangers":"tex","Toronto Blue Jays":"tor",
+        "Washington Nationals":"wsh",
+        // NBA
+        "Atlanta Hawks":"atl","Boston Celtics":"bos","Brooklyn Nets":"bkn",
+        "Charlotte Hornets":"cha","Chicago Bulls":"chi","Cleveland Cavaliers":"cle",
+        "Dallas Mavericks":"dal","Denver Nuggets":"den","Detroit Pistons":"det",
+        "Golden State Warriors":"gs","Houston Rockets":"hou","Indiana Pacers":"ind",
+        "Los Angeles Clippers":"lac","Los Angeles Lakers":"lal","Memphis Grizzlies":"mem",
+        "Miami Heat":"mia","Milwaukee Bucks":"mil","Minnesota Timberwolves":"min",
+        "New Orleans Pelicans":"no","New York Knicks":"ny","Oklahoma City Thunder":"okc",
+        "Orlando Magic":"orl","Philadelphia 76ers":"phi","Phoenix Suns":"phx",
+        "Portland Trail Blazers":"por","Sacramento Kings":"sac","San Antonio Spurs":"sa",
+        "Toronto Raptors":"tor","Utah Jazz":"utah","Washington Wizards":"wsh",
+        // NFL
+        "Arizona Cardinals":"ari","Atlanta Falcons":"atl","Baltimore Ravens":"bal",
+        "Buffalo Bills":"buf","Carolina Panthers":"car","Chicago Bears":"chi",
+        "Cincinnati Bengals":"cin","Cleveland Browns":"cle","Dallas Cowboys":"dal",
+        "Denver Broncos":"den","Detroit Lions":"det","Green Bay Packers":"gb",
+        "Houston Texans":"hou","Indianapolis Colts":"ind","Jacksonville Jaguars":"jax",
+        "Kansas City Chiefs":"kc","Los Angeles Chargers":"lac","Los Angeles Rams":"lar",
+        "Las Vegas Raiders":"lv","Miami Dolphins":"mia","Minnesota Vikings":"min",
+        "New England Patriots":"ne","New Orleans Saints":"no","New York Giants":"nyg",
+        "New York Jets":"nyj","Philadelphia Eagles":"phi","Pittsburgh Steelers":"pit",
+        "Seattle Seahawks":"sea","San Francisco 49ers":"sf","Tampa Bay Buccaneers":"tb",
+        "Tennessee Titans":"ten","Washington Commanders":"wsh",
+        // NHL
+        "Anaheim Ducks":"ana","Boston Bruins":"bos","Buffalo Sabres":"buf",
+        "Calgary Flames":"cgy","Carolina Hurricanes":"car","Chicago Blackhawks":"chi",
+        "Colorado Avalanche":"col","Columbus Blue Jackets":"cbj","Dallas Stars":"dal",
+        "Detroit Red Wings":"det","Edmonton Oilers":"edm","Florida Panthers":"fla",
+        "Los Angeles Kings":"lak","Minnesota Wild":"min","Montreal Canadiens":"mtl",
+        "Nashville Predators":"nsh","New Jersey Devils":"njd","New York Islanders":"nyi",
+        "New York Rangers":"nyr","Ottawa Senators":"ott","Philadelphia Flyers":"phi",
+        "Pittsburgh Penguins":"pit","Seattle Kraken":"sea","San Jose Sharks":"sjs",
+        "St. Louis Blues":"stl","Tampa Bay Lightning":"tbl","Toronto Maple Leafs":"tor",
+        "Utah Hockey Club":"utah","Vancouver Canucks":"van","Vegas Golden Knights":"vgk",
+        "Winnipeg Jets":"wpg","Washington Capitals":"wsh",
+    };
+    const SPORT_ESPN = {
+        baseball_mlb:'mlb', basketball_nba:'nba',
+        americanfootball_nfl:'nfl', icehockey_nhl:'nhl'
+    };
+    function getTeamLogo(sport, teamName) {
+        const league = SPORT_ESPN[sport] || 'mlb';
+        const abbrev = TEAM_ABBREVS[teamName];
+        if (!abbrev) return null;
+        return `https://a.espncdn.com/i/teamlogos/${league}/500/${abbrev}.png`;
+    }
+    function teamLogoImg(teamName, size = 22) {
+        const url = getTeamLogo(selectedSport, teamName);
+        if (!url) return '';
+        return `<img class="team-logo-sm" src="${url}" width="${size}" height="${size}" alt="" onerror="this.style.display='none'">`;
+    }
+
+    // ── My sportsbook odds edge calculator ───────────────────────────
+    function calcMyEdge() {
+        const overStr  = (document.getElementById('myOverOdds')?.value  || '').trim();
+        const underStr = (document.getElementById('myUnderOdds')?.value || '').trim();
+        const el = document.getElementById('myEdgeResult');
+        if (!el) return;
+
+        const toProb = s => {
+            const n = parseInt(s);
+            if (isNaN(n) || n === 0) return null;
+            return n < 0 ? Math.abs(n) / (Math.abs(n) + 100) : 100 / (n + 100);
+        };
+        const overProb  = toProb(overStr);
+        const underProb = toProb(underStr);
+        if (!overProb && !underProb) {
+            el.innerHTML = '<div class="my-edge-empty">Enter at least one odds line above ↑</div>';
+            return;
+        }
+
+        const modelP = lastResult
+            ? (lastResult.model_prob_over_pct != null ? lastResult.model_prob_over_pct / 100
+               : lastResult.hit_probability   != null ? lastResult.hit_probability       : null)
+            : null;
+
+        let html = '<div class="my-edge-rows">';
+        const row = (side, bookProb, modelSideProb) => {
+            const imp = (bookProb * 100).toFixed(1);
+            if (modelSideProb == null) {
+                return `<div class="my-edge-row"><span class="my-edge-side">${side}</span><span class="my-edge-implied">${imp}% implied</span><span class="my-edge-rec" style="color:var(--muted);">Edge calc needs live line</span></div>`;
+            }
+            const edge = ((modelSideProb - bookProb) * 100).toFixed(1);
+            const cls  = edge > 3 ? 'val-pos' : edge < -3 ? 'val-neg' : '';
+            const rec  = edge > 3 ? '✓ Value Bet' : edge < -3 ? '✗ Skip' : '→ Neutral';
+            return `<div class="my-edge-row"><span class="my-edge-side">${side}</span><span class="my-edge-implied">${imp}% implied</span><span class="my-edge-num ${cls}">${edge > 0 ? '+' : ''}${edge}% edge</span><span class="my-edge-rec ${cls}">${rec}</span></div>`;
+        };
+        if (overProb  != null) html += row('Over',  overProb,  modelP);
+        if (underProb != null) html += row('Under', underProb, modelP != null ? 1 - modelP : null);
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
     // ── Render result ─────────────────────────────────────────────────
     function renderResult(data, player, projection) {
         const content  = document.getElementById('resultContent');
@@ -1299,7 +1486,13 @@
             <div class="result-header">
                 <div>
                     <div class="player-name">${escHtml(player)}</div>
-                    <div class="market-label">${escHtml(mktLabel)} · ${escHtml(matchup)}${data.line != null ? 'Line: ' + data.line : 'No live line yet'}</div>
+                    ${selectedHomeTeam && selectedAwayTeam ? `
+                    <div class="matchup-logo-row">
+                        ${teamLogoImg(selectedAwayTeam)} <span class="ml-team">${escHtml(selectedAwayTeam)}</span>
+                        <span class="ml-at">@</span>
+                        <span class="ml-team">${escHtml(selectedHomeTeam)}</span> ${teamLogoImg(selectedHomeTeam)}
+                    </div>` : ''}
+                    <div class="market-label">${escHtml(mktLabel)} · ${data.line != null ? 'Line: ' + data.line : 'No live line yet'}</div>
                 </div>
                 <div class="result-right">
                     <div class="verdict-badge ${vClass}">${vText}</div>
@@ -1356,6 +1549,25 @@
             </div>
             ${bookLabel ? `<div style="padding:6px 22px;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600;letter-spacing:0.5px;">SOURCE: ${bookLabel.toUpperCase()}</div>` : ''}
             ` : ''}
+
+            <div class="my-odds-section">
+                <div class="my-odds-header">
+                    <span class="my-odds-title">📊 Your Sportsbook Odds</span>
+                    <span class="my-odds-hint">American format · e.g. -115 or +130</span>
+                </div>
+                <div class="my-odds-row">
+                    <div class="my-odds-field">
+                        <label class="my-odds-label">Over</label>
+                        <input class="my-odds-input" id="myOverOdds" type="text" placeholder="-110" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
+                    </div>
+                    <div class="my-odds-field">
+                        <label class="my-odds-label">Under</label>
+                        <input class="my-odds-input" id="myUnderOdds" type="text" placeholder="-110" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
+                    </div>
+                    <button class="btn-calc" onclick="calcMyEdge()">Calculate Edge</button>
+                </div>
+                <div id="myEdgeResult" class="my-edge-result"></div>
+            </div>
 
             ${data.claude_take ? `
             <div class="claude-take">
@@ -1417,7 +1629,9 @@
             : lastResult.hit_probability != null ? Math.round(lastResult.hit_probability * 100) : null;
 
         const isFirst = parlayLegs.length === 0;
-        parlayLegs.push({ id: Date.now(), player: lastResult.player, market: mktLabel, side, prob });
+        const projVal = parseFloat(document.getElementById('projection')?.value || '0');
+        const ctx = (prob == null) ? projectionContext(projVal, document.getElementById('market').value) : null;
+        parlayLegs.push({ id: Date.now(), player: lastResult.player, market: mktLabel, side, prob, ctxLabel: ctx?.label, ctxCls: ctx?.cls });
         renderParlay();
         showToast('✓ Added to parlay');
         // Auto-open tray on first leg so users discover it
@@ -1461,7 +1675,7 @@
             <div class="tray-leg">
                 <div>
                     <div class="tray-leg-player">${escHtml(leg.player)} — <span class="tray-leg-side">${leg.side}</span></div>
-                    <div class="tray-leg-detail">${escHtml(leg.market)}${leg.prob != null ? ' · ' + leg.prob + '% hit prob' : ''}</div>
+                    <div class="tray-leg-detail">${escHtml(leg.market)}${leg.prob != null ? ' · ' + leg.prob + '% hit prob' : (leg.ctxLabel ? ' · <span class="' + leg.ctxCls + '">' + leg.ctxLabel + ' projection</span>' : '')}</div>
                 </div>
                 <button class="btn-remove" onclick="removeLeg(${leg.id})" aria-label="Remove">✕</button>
             </div>`).join('');
@@ -1492,16 +1706,32 @@
                 </div>`;
         } else {
             pillEl.style.display = 'none';
-            const need = 2 - withProb.length;
-            summary.innerHTML = `
-                <div class="tray-stat">
-                    <div class="tray-stat-label">Legs</div>
-                    <div class="tray-stat-value">${parlayLegs.length}</div>
-                </div>
-                <div class="tray-stat" style="grid-column:span 2;">
-                    <div class="tray-stat-label">Combined Odds</div>
-                    <div class="tray-stat-sub" style="font-size:11px;margin-top:6px;">Add ${need} more leg${need > 1 ? 's' : ''} with live lines to calculate</div>
-                </div>`;
+            // Show projection quality labels when no live lines available
+            const allNoLine = withProb.length === 0 && parlayLegs.every(l => l.ctxLabel);
+            if (allNoLine) {
+                const ctxSummary = parlayLegs.map(l => `<span class="${l.ctxCls || ''}">${l.ctxLabel}</span>`).join(' + ');
+                summary.innerHTML = `
+                    <div class="tray-stat">
+                        <div class="tray-stat-label">Legs</div>
+                        <div class="tray-stat-value">${parlayLegs.length}</div>
+                    </div>
+                    <div class="tray-stat" style="grid-column:span 2;">
+                        <div class="tray-stat-label">Projection Quality</div>
+                        <div style="font-size:12px;font-weight:700;margin-top:4px;">${ctxSummary}</div>
+                        <div class="tray-stat-sub">Enter your sportsbook odds on each result to calculate edge</div>
+                    </div>`;
+            } else {
+                const need = 2 - withProb.length;
+                summary.innerHTML = `
+                    <div class="tray-stat">
+                        <div class="tray-stat-label">Legs</div>
+                        <div class="tray-stat-value">${parlayLegs.length}</div>
+                    </div>
+                    <div class="tray-stat" style="grid-column:span 2;">
+                        <div class="tray-stat-label">Combined Odds</div>
+                        <div class="tray-stat-sub" style="font-size:11px;margin-top:6px;">Add ${need} more leg${need > 1 ? 's' : ''} with live lines to calculate</div>
+                    </div>`;
+            }
         }
     }
 
