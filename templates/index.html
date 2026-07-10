@@ -382,6 +382,15 @@
         .val-pos { color: var(--green); }
         .val-neg { color: var(--red); }
 
+        /* Stat sub-label (no-lines context) */
+        .stat-sub {
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 3px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
         /* Confidence bar */
         .conf-track {
             height: 4px;
@@ -1179,6 +1188,45 @@
         }
     }
 
+    // ── Projection context (no-lines fallback) ───────────────────────
+    const STAT_NORMS = {
+        player_pitcher_strikeouts:   { low: 3,    avg: 5.5,  high: 8   },
+        player_pitcher_outs:         { low: 9,    avg: 15,   high: 20  },
+        player_pitcher_hits_allowed: { low: 1,    avg: 4.5,  high: 8   },
+        player_batter_home_runs:     { low: 0,    avg: 0.15, high: 0.5 },
+        player_batter_hits:          { low: 0.5,  avg: 1.05, high: 1.8 },
+        player_batter_total_bases:   { low: 0.8,  avg: 1.5,  high: 3   },
+        player_batter_rbis:          { low: 0.2,  avg: 0.6,  high: 1.5 },
+        player_batter_runs_scored:   { low: 0.3,  avg: 0.6,  high: 1.2 },
+        player_batter_stolen_bases:  { low: 0,    avg: 0.1,  high: 0.4 },
+        player_points:               { low: 10,   avg: 19,   high: 30  },
+        player_rebounds:             { low: 3,    avg: 7,    high: 14  },
+        player_assists:              { low: 2,    avg: 5,    high: 10  },
+        player_threes:               { low: 1,    avg: 2.5,  high: 5   },
+        player_blocks:               { low: 0.3,  avg: 1,    high: 2.5 },
+        player_steals:               { low: 0.3,  avg: 0.9,  high: 2   },
+        player_points_rebounds_assists: { low: 20, avg: 35, high: 55  },
+        player_pass_yds:             { low: 150,  avg: 250,  high: 350 },
+        player_pass_tds:             { low: 0.5,  avg: 1.8,  high: 3.5 },
+        player_rush_yds:             { low: 20,   avg: 65,   high: 110 },
+        player_reception_yds:        { low: 20,   avg: 55,   high: 100 },
+        player_receptions:           { low: 2,    avg: 5,    high: 9   },
+        player_shots_on_goal:        { low: 1,    avg: 3,    high: 6   },
+        player_goals:                { low: 0,    avg: 0.3,  high: 0.8 },
+    };
+
+    function projectionContext(projection, market) {
+        const norm = STAT_NORMS[market];
+        if (!norm) return { label: 'Projection', cls: '', sub: '' };
+        const { low, avg, high } = norm;
+        const range = high - low;
+        if (projection <= low + range * 0.2)  return { label: 'Low',       cls: 'val-neg',  sub: 'Below typical range'  };
+        if (projection <= avg * 0.85)          return { label: 'Below Avg', cls: 'val-neg',  sub: `Avg ~${avg}`          };
+        if (projection <= avg * 1.15)          return { label: 'Average',   cls: '',         sub: `Avg ~${avg}`          };
+        if (projection <= high * 0.9)          return { label: 'Above Avg', cls: 'val-pos',  sub: `Avg ~${avg}`          };
+        return                                        { label: 'Aggressive', cls: 'val-pos',  sub: 'High-end projection'  };
+    }
+
     // ── Render result ─────────────────────────────────────────────────
     function renderResult(data, player, projection) {
         const content  = document.getElementById('resultContent');
@@ -1222,6 +1270,9 @@
         const barColor  = confPct == null ? 'var(--muted)'
             : confPct >= 60 ? 'var(--green)' : confPct >= 45 ? 'var(--yellow)' : 'var(--red)';
 
+        // Projection context — used when no live sportsbook line exists
+        const ctx = projectionContext(Number(projection), document.getElementById('market').value);
+
         // Matchup
         const matchup = selectedHomeTeam && selectedAwayTeam
             ? `${selectedAwayTeam} @ ${selectedHomeTeam} · ` : '';
@@ -1253,8 +1304,8 @@
                 <div class="result-right">
                     <div class="verdict-badge ${vClass}">${vText}</div>
                     <div class="hit-prob">
-                        <div class="prob-value ${probCls}" id="probVal">${prob != null ? '0%' : '—'}</div>
-                        <div class="prob-label">Hit Probability</div>
+                        <div class="prob-value ${prob != null ? probCls : (noLines ? '' : '')}" id="probVal">${prob != null ? '0%' : (noLines ? 'Proj' : '—')}</div>
+                        <div class="prob-label">${noLines ? 'No Live Line' : 'Hit Probability'}</div>
                     </div>
                 </div>
             </div>
@@ -1266,18 +1317,21 @@
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Market Line</div>
-                    <div class="stat-value">${data.line ?? '—'}</div>
+                    <div class="stat-value" style="${noLines ? 'color:var(--muted);font-size:16px;' : ''}">${data.line ?? (noLines ? 'No Line' : '—')}</div>
+                    ${noLines ? `<div class="stat-sub">Needs live line</div>` : ''}
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Edge</div>
-                    <div class="stat-value ${edgeCls}">${edgeDisplay}</div>
+                    <div class="stat-value ${edgeCls}" style="${noLines ? 'color:var(--muted);font-size:16px;' : ''}">${noLines ? 'No Line' : edgeDisplay}</div>
+                    ${noLines ? `<div class="stat-sub">Needs live line</div>` : ''}
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Confidence</div>
-                    <div class="stat-value ${confCls}" style="font-size:17px;">${confText}</div>
+                    <div class="stat-value ${noLines ? ctx.cls : confCls}" style="font-size:17px;">${noLines ? ctx.label : confText}</div>
                     <div class="conf-track">
                         <div class="conf-fill" id="confBar" style="background:${barColor};"></div>
                     </div>
+                    ${noLines && ctx.sub ? `<div class="stat-sub">${ctx.sub}</div>` : ''}
                 </div>
             </div>
 
@@ -1323,7 +1377,17 @@
         // Confidence bar fill animation
         setTimeout(() => {
             const bar = document.getElementById('confBar');
-            if (bar && confPct != null) bar.style.width = confPct + '%';
+            if (bar) {
+                if (confPct != null) {
+                    bar.style.width = confPct + '%';
+                } else if (noLines) {
+                    // Show projection quality on bar even without live line
+                    const barPcts = { 'Low': 15, 'Below Avg': 32, 'Average': 55, 'Above Avg': 72, 'Aggressive': 88, 'Projection': 50 };
+                    const barColors = { 'Low': 'var(--red)', 'Below Avg': 'var(--yellow)', 'Average': 'var(--muted)', 'Above Avg': 'var(--green)', 'Aggressive': 'var(--green)', 'Projection': 'var(--muted)' };
+                    bar.style.width  = (barPcts[ctx.label]  || 50) + '%';
+                    bar.style.background = barColors[ctx.label] || 'var(--muted)';
+                }
+            }
         }, 60);
     }
 
