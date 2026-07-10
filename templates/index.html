@@ -662,9 +662,12 @@
 
             <div class="form-group">
                 <label>Player Name</label>
-                <input type="text" id="playerName" placeholder="Type any player name…"
+                <input type="text" id="playerName" placeholder="Search or type any player name…"
                        list="playerSuggestions" autocomplete="off">
                 <datalist id="playerSuggestions"></datalist>
+                <div style="font-size:10px;color:var(--muted);margin-top:5px;font-weight:500;">
+                    Any player name works — suggestions are a guide, not a limit.
+                </div>
             </div>
 
             <div class="form-group">
@@ -814,46 +817,108 @@
             'Saquon Barkley','Nick Chubb','Jonathan Taylor','Rachaad White','Isiah Pacheco',
         ],
         baseball_mlb: [
+            // ── Dodgers ──
             'Shohei Ohtani','Mookie Betts','Freddie Freeman','Will Smith','Teoscar Hernandez',
+            'Tommy Edman','Andy Pages','Gavin Lux','Max Muncy',
             'Roki Sasaki','Yoshinobu Yamamoto','Tyler Glasnow','Walker Buehler','Clayton Kershaw',
             'James Paxton','Bobby Miller','Jack Flaherty','Ben Casparius',
+            // ── Padres ──
             'Fernando Tatis Jr.','Xander Bogaerts','Jake Cronenworth','Jurickson Profar',
+            'Luis Arraez','Ha-Seong Kim','Jackson Merrill','Kyle Higashioka',
             'Dylan Cease','Michael King','Joe Musgrove','Randy Vasquez','Matt Waldron',
-            'Aaron Judge','Juan Soto','Gerrit Cole','Carlos Rodon','Nestor Cortes','Clarke Schmidt',
-            'Jazz Chisholm Jr.','Anthony Volpe','Paul Goldschmidt',
-            'Ronald Acuna Jr.','Ozzie Albies','Austin Riley','Spencer Strider','Max Fried',
-            'Charlie Morton','Reynaldo Lopez','AJ Smith-Shawver',
-            'Seiya Suzuki','Dansby Swanson','Ian Happ','Cody Bellinger',
-            'Justin Steele','Jameson Taillon','Matthew Boyd',
-            'Nolan Arenado','Brendan Donovan','Miles Mikolas','Sonny Gray',
-            'Corbin Burnes','Freddy Peralta','Colin Rea','Frankie Montas',
-            'Pete Alonso','Francisco Lindor','Mark Vientos',
-            'Zack Wheeler','Sean Manaea','Jose Quintana',
-            'Aaron Nola','Ranger Suarez','Bryce Harper','Trea Turner','Nick Castellanos',
+            // ── Yankees ──
+            'Aaron Judge','Juan Soto','Giancarlo Stanton','Anthony Volpe','Jazz Chisholm Jr.',
+            'Austin Wells','DJ LeMahieu',
+            'Gerrit Cole','Carlos Rodon','Nestor Cortes','Clarke Schmidt','Luis Gil',
+            // ── Braves ──
+            'Ronald Acuna Jr.','Ozzie Albies','Austin Riley','Matt Olson',
+            'Michael Harris II','Sean Murphy','Travis d\'Arnaud',
+            'Spencer Strider','Max Fried','Charlie Morton','Chris Sale',
+            'Reynaldo Lopez','AJ Smith-Shawver','Grant Holmes',
+            // ── Cubs ──
+            'Seiya Suzuki','Dansby Swanson','Ian Happ','Cody Bellinger','Nico Hoerner',
+            'Kyle Tucker','Patrick Wisdom',
+            'Justin Steele','Jameson Taillon','Matthew Boyd','Colin Rea',
+            // ── Cardinals ──
+            'Nolan Arenado','Paul Goldschmidt','Brendan Donovan','Lars Nootbaar','Jordan Walker',
+            'Ivan Herrera',
+            'Miles Mikolas','Sonny Gray','Andre Pallante','Lance Lynn',
+            // ── Brewers ──
+            'Christian Yelich','Jackson Chourio','Sal Frelick','Willy Adames','William Contreras',
+            'Corbin Burnes','Freddy Peralta','Colin Rea','Frankie Montas','Wade Miley',
+            // ── Mets ──
+            'Pete Alonso','Francisco Lindor','Mark Vientos','Brandon Nimmo','Jeff McNeil',
+            'Zack Wheeler','Sean Manaea','Jose Quintana','David Peterson',
+            // ── Phillies ──
+            'Bryce Harper','Trea Turner','Nick Castellanos','Kyle Schwarber',
+            'J.T. Realmuto','Alec Bohm','Johan Rojas',
+            'Aaron Nola','Ranger Suarez','Cristopher Sanchez','Zach Eflin',
+            // ── Orioles ──
             'Gunnar Henderson','Adley Rutschman','Colton Cowser','Ryan Mountcastle',
-            'Dean Kremer','Kyle Bradish','Cole Irvin','Zach Eflin','Albert Suarez',
-            'Rafael Devers','Jarren Duran','Triston Casas','Garrett Crochet',
-            'Tanner Houck','Brayan Bello',
-            'Shane McClanahan','Zach Littell','Ryan Pepiot',
-            'Vladimir Guerrero Jr.','Bo Bichette','Kevin Gausman','Chris Bassitt',
-            'Sean Burke','Erick Fedde','Chris Flexen','Jonathan Cannon',
-            'Andrew Vaughn','Lenyn Sosa','Gavin Sheets',
-            'Shane Bieber','Tanner Bibee','Logan Allen','Gavin Williams',
-            'Tarik Skubal','Casey Mize','Reese Olson',
-            'Cole Ragans','Seth Lugo','Michael Wacha',
-            'Pablo Lopez','Bailey Ober','Joe Ryan',
-            'Yordan Alvarez','Jose Altuve','Framber Valdez','Hunter Brown','Ronel Blanco',
-            'Corey Seager','Marcus Semien','Nathan Eovaldi','Cody Bradford',
-            'JP Sears','Luis Severino',
-            'Mike Trout','Zach Neto','Tyler Anderson','Patrick Sandoval',
-            'Julio Rodriguez','Cal Raleigh','Logan Gilbert','George Kirby','Luis Castillo',
-            'Bryan Woo','Emerson Hancock',
-            'Logan Webb','Kyle Harrison',
-            'Corbin Carroll','Ketel Marte','Zac Gallen','Merrill Kelly','Eduardo Rodriguez',
-            'Elly De La Cruz','Hunter Greene','Nick Lodolo','Graham Ashcraft',
-            'Paul Skenes','Mitch Keller','Luis Ortiz',
-            'MacKenzie Gore','Jake Irvin',
-            'Sandy Alcantara','Yu Darvish','Jose Berrios','Lance Lynn',
+            'Anthony Santander','Ramon Urias',
+            'Dean Kremer','Kyle Bradish','Cole Irvin','Albert Suarez','Grayson Rodriguez',
+            // ── Red Sox ──
+            'Rafael Devers','Jarren Duran','Triston Casas','Tyler O\'Neill',
+            'Wilyer Abreu','Connor Wong','Alex Bregman',
+            'Garrett Crochet','Tanner Houck','Brayan Bello','Nick Pivetta',
+            // ── Rays ──
+            'Yandy Diaz','Isaac Paredes','Randy Arozarena','Josh Lowe','Jose Siri',
+            'Shane McClanahan','Zach Littell','Ryan Pepiot','Taj Bradley',
+            // ── Blue Jays ──
+            'Vladimir Guerrero Jr.','Bo Bichette','George Springer','Daulton Varsho',
+            'Davis Schneider','Danny Jansen',
+            'Kevin Gausman','Chris Bassitt','Jose Berrios','Yusei Kikuchi',
+            // ── White Sox ──
+            'Sean Burke','Andrew Vaughn','Lenyn Sosa','Gavin Sheets','Corey Julks',
+            'Erick Fedde','Chris Flexen','Jonathan Cannon','Garrett Crochet',
+            // ── Guardians ──
+            'Jose Ramirez','Steven Kwan','Josh Naylor','Lane Thomas','Bo Naylor',
+            'Shane Bieber','Tanner Bibee','Logan Allen','Gavin Williams','Emmanuel Clase',
+            // ── Tigers ──
+            'Riley Greene','Spencer Torkelson','Matt Vierling','Kerry Carpenter','Jake Rogers',
+            'Tarik Skubal','Casey Mize','Reese Olson','Jack Flaherty','Kenta Maeda',
+            // ── Royals ──
+            'Bobby Witt Jr.','Salvador Perez','Vinnie Pasquantino','MJ Melendez',
+            'Cole Ragans','Seth Lugo','Michael Wacha','Brady Singer','Alec Marsh',
+            // ── Twins ──
+            'Carlos Correa','Byron Buxton','Ryan Jeffers','Trevor Larnach','Matt Wallner',
+            'Pablo Lopez','Bailey Ober','Joe Ryan','Simeon Woods Richardson','Chris Paddack',
+            // ── Astros ──
+            'Yordan Alvarez','Jose Altuve','Jeremy Pena','Alex Bregman','Chas McCormick',
+            'Framber Valdez','Hunter Brown','Ronel Blanco','Cristian Javier','Jose Urquidy',
+            // ── Rangers ──
+            'Corey Seager','Marcus Semien','Wyatt Langford','Adolis Garcia','Nathaniel Lowe',
+            'Nathan Eovaldi','Cody Bradford','Jacob deGrom','Tyler Mahle','Kumar Rocker',
+            // ── Athletics ──
+            'Brent Rooker','Lawrence Butler','Shea Langeliers','Zack Gelof','JJ Bleday',
+            'JP Sears','Luis Severino','Joey Estes','Mitch Spence',
+            // ── Angels ──
+            'Mike Trout','Zach Neto','Jo Adell','Anthony Rendon','Luis Rengifo',
+            'Tyler Anderson','Patrick Sandoval','Reid Detmers','Jose Soriano',
+            // ── Mariners ──
+            'Julio Rodriguez','Cal Raleigh','Mitch Haniger','J.P. Crawford','Ty France',
+            'Logan Gilbert','George Kirby','Luis Castillo','Bryan Woo','Emerson Hancock',
+            // ── Giants ──
+            'Matt Chapman','Wilmer Flores','Patrick Bailey','Mike Yastrzemski','LaMonte Wade Jr.',
+            'Logan Webb','Kyle Harrison','Robbie Ray','Jordan Hicks',
+            // ── Diamondbacks ──
+            'Corbin Carroll','Ketel Marte','Lourdes Gurriel Jr.','Christian Walker','Joc Pederson',
+            'Zac Gallen','Merrill Kelly','Eduardo Rodriguez','Brandon Pfaadt',
+            // ── Reds ──
+            'Elly De La Cruz','Spencer Steer','Tyler Stephenson','TJ Friedl','Stuart Fairchild',
+            'Hunter Greene','Nick Lodolo','Graham Ashcraft','Frankie Montas',
+            // ── Pirates ──
+            'Bryan Reynolds','Oneil Cruz','Ke\'Bryan Hayes','Andrew McCutchen','Connor Joe',
+            'Paul Skenes','Mitch Keller','Luis Ortiz','Marco Gonzales',
+            // ── Nationals ──
+            'CJ Abrams','James Wood','Luis Garcia Jr.','Keibert Ruiz','Joey Meneses',
+            'MacKenzie Gore','Jake Irvin','Trevor Williams','Patrick Corbin',
+            // ── Marlins ──
+            'Jazz Chisholm Jr.','Jake Burger','Bryan De La Cruz','Garrett Cooper',
+            'Sandy Alcantara','Yu Darvish','Sixto Sanchez','Edward Cabrera',
+            // ── Rockies ──
+            'Ezequiel Tovar','Ryan McMahon','Charlie Blackmon','Nolan Jones',
+            'Kyle Freeland','Austin Gomber','Cal Quantrill',
         ],
         icehockey_nhl: [
             'Connor McDavid','Nathan MacKinnon','Leon Draisaitl','Auston Matthews',
