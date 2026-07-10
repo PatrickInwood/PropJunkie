@@ -62,9 +62,65 @@
             background: var(--accent-hover);
             box-shadow: 0 0 20px var(--accent-glow);
         }
+        /* ── Hamburger ── */
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            margin-left: 8px;
+        }
+        .hamburger span {
+            display: block;
+            width: 22px; height: 2px;
+            background: var(--text);
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+        .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+        .hamburger.open span:nth-child(2) { opacity: 0; }
+        .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+        /* ── Mobile nav overlay ── */
+        .mobile-nav {
+            display: none;
+            position: fixed;
+            top: 52px; left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            z-index: 99;
+            padding: 8px 0;
+            border-top: 1px solid var(--border);
+            flex-direction: column;
+        }
+        .mobile-nav.open { display: flex; }
+        .mobile-nav a {
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 600;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: block;
+        }
+        .mobile-nav a:last-child { border-bottom: none; }
+        .mobile-nav .mobile-launch {
+            margin: 16px 24px 0;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 10px;
+            text-align: center;
+            padding: 14px;
+            font-weight: 700;
+            border-bottom: none;
+        }
+
         @media (max-width: 600px) {
-            nav { padding: 14px 16px; }
+            nav { padding: 0 16px; height: 52px; }
             .nav-text-links { display: none; }
+            .hamburger { display: flex; }
+            .btn-nav { display: none; }
         }
 
         /* ── HERO ── */
@@ -457,8 +513,32 @@
             <a href="#pricing">Pricing</a>
         </div>
         <a href="/app" class="btn-nav">Launch App →</a>
+        <button class="hamburger" id="hamburger" onclick="toggleMobileNav()" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
     </div>
 </nav>
+<div class="mobile-nav" id="mobileNav">
+    <a href="#features" onclick="closeMobileNav()">Features</a>
+    <a href="/lines" onclick="closeMobileNav()">Live Lines</a>
+    <a href="/app#parlay" onclick="closeMobileNav()">Parlay Builder</a>
+    <a href="#pricing" onclick="closeMobileNav()">Pricing</a>
+    <a href="/app" class="mobile-launch">Launch App →</a>
+</div>
+<script>
+    function toggleMobileNav() {
+        const nav = document.getElementById('mobileNav');
+        const btn = document.getElementById('hamburger');
+        nav.classList.toggle('open');
+        btn.classList.toggle('open');
+        document.body.style.overflow = nav.classList.contains('open') ? 'hidden' : '';
+    }
+    function closeMobileNav() {
+        document.getElementById('mobileNav').classList.remove('open');
+        document.getElementById('hamburger').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+</script>
 
 <!-- HERO -->
 <section class="hero">

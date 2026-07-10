@@ -821,18 +821,23 @@
                 <input type="number" id="projection" placeholder="e.g. 26.5" step="0.5" min="0">
             </div>
 
+            <div class="form-group" id="playerTypeGroup" style="display:none;">
+                <label>Player Type</label>
+                <div class="style-tabs">
+                    <div class="style-tab active" data-ptype="batter">⚾ Batter</div>
+                    <div class="style-tab" data-ptype="pitcher">⚾ Pitcher</div>
+                    <div class="style-tab" data-ptype="twoway">🔄 Two-Way</div>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label>Stat Market</label>
                 <select id="market"></select>
             </div>
 
-            <div class="form-group">
-                <label>Claude's Style</label>
-                <div class="style-tabs">
-                    <div class="style-tab active" data-style="sharp">Sharp</div>
-                    <div class="style-tab" data-style="casual">Casual</div>
-                    <div class="style-tab" data-style="detailed">Detailed</div>
-                </div>
+            <div class="form-group" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <label style="margin:0;">Analysis Style</label>
+                <span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);padding:3px 10px;border-radius:20px;letter-spacing:0.5px;">✓ Full Detail</span>
             </div>
 
             <button class="btn" id="analyzeBtn" onclick="analyzeProp()">
@@ -874,7 +879,8 @@
     const API = '';
     let selectedEventId   = null;
     let selectedSport     = 'basketball_nba';
-    let selectedStyle     = 'sharp';
+    let selectedStyle     = 'detailed';   // Always full detail
+    let selectedPlayerType = 'batter';   // MLB only: batter | pitcher | twoway
     let selectedHomeTeam  = null;
     let selectedAwayTeam  = null;
     let lastResult        = null;
@@ -949,16 +955,29 @@
             { value: 'player_receptions',    label: 'Receptions' },
             { value: 'player_anytime_td',    label: 'Anytime TD' },
         ],
-        baseball_mlb: [
-            { value: 'player_pitcher_strikeouts',   label: 'Pitcher Strikeouts' },
-            { value: 'player_pitcher_outs',         label: 'Pitcher Outs' },
-            { value: 'player_pitcher_hits_allowed', label: 'Hits Allowed' },
-            { value: 'player_batter_home_runs',     label: 'Home Runs' },
+        baseball_mlb_batter: [
             { value: 'player_batter_hits',          label: 'Hits' },
+            { value: 'player_batter_home_runs',     label: 'Home Runs' },
             { value: 'player_batter_total_bases',   label: 'Total Bases' },
             { value: 'player_batter_rbis',          label: 'RBIs' },
             { value: 'player_batter_runs_scored',   label: 'Runs Scored' },
             { value: 'player_batter_stolen_bases',  label: 'Stolen Bases' },
+        ],
+        baseball_mlb_pitcher: [
+            { value: 'player_pitcher_strikeouts',   label: 'Strikeouts (K)' },
+            { value: 'player_pitcher_outs',         label: 'Outs Recorded' },
+            { value: 'player_pitcher_hits_allowed', label: 'Hits Allowed' },
+        ],
+        baseball_mlb_twoway: [
+            { value: 'player_batter_hits',          label: 'Hits' },
+            { value: 'player_batter_home_runs',     label: 'Home Runs' },
+            { value: 'player_batter_total_bases',   label: 'Total Bases' },
+            { value: 'player_batter_rbis',          label: 'RBIs' },
+            { value: 'player_batter_runs_scored',   label: 'Runs Scored' },
+            { value: 'player_batter_stolen_bases',  label: 'Stolen Bases' },
+            { value: 'player_pitcher_strikeouts',   label: 'Strikeouts (K)' },
+            { value: 'player_pitcher_outs',         label: 'Outs Recorded' },
+            { value: 'player_pitcher_hits_allowed', label: 'Hits Allowed' },
         ],
         icehockey_nhl: [
             { value: 'player_shots_on_goal', label: 'Shots on Goal' },
@@ -1107,8 +1126,12 @@
 
     function updateMarketDropdown(sport) {
         const select = document.getElementById('market');
-        select.innerHTML = (SPORT_MARKETS[sport] || [])
+        const key    = sport === 'baseball_mlb' ? `baseball_mlb_${selectedPlayerType}` : sport;
+        select.innerHTML = (SPORT_MARKETS[key] || [])
             .map(m => `<option value="${m.value}">${m.label}</option>`).join('');
+        // Show/hide the player type toggle for MLB
+        const ptGroup = document.getElementById('playerTypeGroup');
+        if (ptGroup) ptGroup.style.display = sport === 'baseball_mlb' ? '' : 'none';
     }
     function updatePlayerSuggestions(sport) {
         document.getElementById('playerSuggestions').innerHTML =
@@ -1130,12 +1153,13 @@
         });
     });
 
-    // Style tab clicks
-    document.querySelectorAll('.style-tab').forEach(tab => {
+    // Player-type tab clicks (MLB batter/pitcher/two-way)
+    document.querySelectorAll('[data-ptype]').forEach(tab => {
         tab.addEventListener('click', () => {
-            document.querySelectorAll('.style-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('[data-ptype]').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            selectedStyle = tab.dataset.style;
+            selectedPlayerType = tab.dataset.ptype;
+            updateMarketDropdown(selectedSport);
         });
     });
 
@@ -1675,10 +1699,13 @@
                         <input class="my-odds-input" id="myOverOdds" type="text" placeholder="-115" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
                     </div>
                     <div class="my-odds-field">
-                        <label class="my-odds-label">Under Odds</label>
+                        <label class="my-odds-label">Under Odds <span style="font-weight:400;opacity:0.6;">(optional)</span></label>
                         <input class="my-odds-input" id="myUnderOdds" type="text" placeholder="-115" maxlength="7" onkeydown="if(event.key==='Enter')calcMyEdge()">
                     </div>
                     <button class="btn-calc" onclick="calcMyEdge()">Analyze →</button>
+                </div>
+                <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5;">
+                    💡 DraftKings "1+ Hits" = Line <strong>0.5</strong> &nbsp;·&nbsp; "2+ Hits" = Line <strong>1.5</strong> &nbsp;·&nbsp; "3+ Hits" = Line <strong>2.5</strong>
                 </div>
                 <div id="myEdgeResult" class="my-edge-result"></div>
             </div>
