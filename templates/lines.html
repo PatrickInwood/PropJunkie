@@ -370,7 +370,11 @@
     function renderGame(g) {
         const home = g.home_team;
         const away = g.away_team;
-        const time = new Date(g.commence_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const _d   = new Date(g.commence_time);
+        // The Odds API stores commence_time 1 min after actual schedule.
+        // All games start on 5-min intervals, so round to nearest 5.
+        _d.setMinutes(Math.round(_d.getMinutes() / 5) * 5, 0, 0);
+        const time = _d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
         // Moneyline
         const homeML = formatOdds(g.h2h?.home);

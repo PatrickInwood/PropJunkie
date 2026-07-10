@@ -830,6 +830,9 @@
         if (!utcString) return 'TBD';
         const d   = new Date(utcString);
         if (isNaN(d.getTime())) return 'TBD';
+        // The Odds API stores commence_time 1 min after actual schedule.
+        // All games start on 5-min intervals, so round to nearest 5.
+        d.setMinutes(Math.round(d.getMinutes() / 5) * 5, 0, 0);
 
         const now      = new Date();
         const todayStr = now.toDateString();
