@@ -70,6 +70,18 @@ def lines_page():
     return render_template('lines.html')
 
 
+@app.route('/privacy', methods=['GET'])
+@limiter.exempt
+def privacy_page():
+    return render_template('privacy.html')
+
+
+@app.route('/terms', methods=['GET'])
+@limiter.exempt
+def terms_page():
+    return render_template('terms.html')
+
+
 # ─────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────
