@@ -2003,13 +2003,26 @@
 
     // ── Markdown ──────────────────────────────────────────────────────
     function mdToHtml(text) {
+        // Convert markdown tables to styled HTML divs before other processing
+        text = text.replace(
+            /(\|[^\n]+\|\n)((?:\|[\s\-:]+)+\|\n)((?:\|[^\n]+\|\n?)+)/gm,
+            (_, headerRow, _divider, bodyRows) => {
+                const parseRow = r => r.split('|').slice(1, -1).map(c => c.trim());
+                const headers  = parseRow(headerRow);
+                const rows     = bodyRows.trim().split('\n').map(parseRow);
+                const thStyle  = 'padding:5px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)';
+                const tdStyle  = 'padding:6px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04)';
+                return `<table style="width:100%;border-collapse:collapse;margin:10px 0;background:var(--surface2);border-radius:8px;overflow:hidden">
+                    <tr>${headers.map(h => `<th style="${thStyle}">${h}</th>`).join('')}</tr>
+                    ${rows.map(r => `<tr>${r.map(c => `<td style="${tdStyle}">${c}</td>`).join('')}</tr>`).join('')}
+                </table>`;
+            }
+        );
         return text
             .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
             .replace(/\*\*(.+?)\*\*/g,    '<strong>$1</strong>')
-            // Handle unclosed bold at end of line (e.g. **NO LINE at EOF)
             .replace(/\*\*([^*\n]+)$/gm,  '<strong>$1</strong>')
             .replace(/\*(.+?)\*/g,         '<em>$1</em>')
-            // Clean up any remaining stray asterisks
             .replace(/\*{1,2}/g,           '')
             .replace(/^---+$/gm,           '<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">')
             .replace(/\n{2,}/g,            '<br><br>')

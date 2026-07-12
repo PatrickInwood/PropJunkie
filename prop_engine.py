@@ -264,26 +264,29 @@ ESPN_SPORT_MAP = {
 }
 
 MARKET_ESPN_MAP = {
-    'player_pass_yds':                ('passing',   'passingYards',             'pass yards'),
-    'player_pass_tds':                ('passing',   'passingTouchdowns',        'pass TDs'),
-    'player_rush_yds':                ('rushing',   'rushingYards',             'rush yards'),
-    'player_reception_yds':           ('receiving', 'receivingYards',           'receiving yards'),
-    'player_receptions':              ('receiving', 'receptions',               'receptions'),
-    'player_anytime_td':              ('rushing',   'touchdowns',               'total TDs'),
-    'player_points':                  ('scoring',   'points',                   'points'),
-    'player_rebounds':                ('rebounds',  'rebounds',                 'rebounds'),
-    'player_assists':                 ('general',   'assists',                  'assists'),
-    'player_threes':                  ('general',   'threePointFieldGoalsMade', '3-pointers'),
-    'player_blocks':                  ('general',   'blocks',                   'blocks'),
-    'player_steals':                  ('general',   'steals',                   'steals'),
-    'player_points_rebounds_assists': ('general',   'points',                   'pts+reb+ast'),
-    'player_pitcher_strikeouts':      ('pitching',  'strikeouts',               'strikeouts'),
-    'player_pitcher_outs':            ('pitching',  'outs',                     'outs'),
-    'player_batter_hits':             ('batting',   'hits',                     'hits'),
-    'player_batter_home_runs':        ('batting',   'homeRuns',                 'home runs'),
-    'player_batter_total_bases':      ('batting',   'totalBases',               'total bases'),
-    'player_shots_on_goal':           ('skating',   'shots',                    'shots'),
-    'player_goals':                   ('skating',   'goals',                    'goals'),
+    # (cat_name_fragment, [stat_name_fragments...], human_label)
+    # ESPN often uses abbreviations (H, HR, K, REB, AST) not full names.
+    # Provide multiple search terms — the first match wins.
+    'player_pass_yds':                ('passing',   ['passingyards', 'yds', 'yards'],           'pass yards'),
+    'player_pass_tds':                ('passing',   ['touchdowns', 'td', 'tds'],                'pass TDs'),
+    'player_rush_yds':                ('rushing',   ['rushingyards', 'yds', 'yards'],           'rush yards'),
+    'player_reception_yds':           ('receiving', ['receivingyards', 'yds', 'yards'],         'receiving yards'),
+    'player_receptions':              ('receiving', ['receptions', 'rec'],                      'receptions'),
+    'player_anytime_td':              ('rushing',   ['touchdowns', 'td'],                       'total TDs'),
+    'player_points':                  ('scoring',   ['points', 'pts'],                          'points'),
+    'player_rebounds':                ('rebounds',  ['rebounds', 'reb'],                        'rebounds'),
+    'player_assists':                 ('general',   ['assists', 'ast'],                         'assists'),
+    'player_threes':                  ('general',   ['threepointfieldgoalsmade', '3pm', 'fg3m'],'3-pointers'),
+    'player_blocks':                  ('general',   ['blocks', 'blk'],                          'blocks'),
+    'player_steals':                  ('general',   ['steals', 'stl'],                          'steals'),
+    'player_points_rebounds_assists': ('scoring',   ['points', 'pts'],                          'pts+reb+ast'),
+    'player_pitcher_strikeouts':      ('pitching',  ['strikeouts', 'so', ' k'],                'strikeouts'),
+    'player_pitcher_outs':            ('pitching',  ['outs', 'ip'],                             'outs'),
+    'player_batter_hits':             ('batting',   [' h ', 'hits', ' h\t'],                   'hits'),
+    'player_batter_home_runs':        ('batting',   ['hr', 'homeruns', 'home runs'],            'home runs'),
+    'player_batter_total_bases':      ('batting',   ['totalbases', 'tb'],                       'total bases'),
+    'player_shots_on_goal':           ('skating',   ['shots', 'sog'],                           'shots'),
+    'player_goals':                   ('skating',   ['goals', ' g '],                           'goals'),
 }
 
 
@@ -300,7 +303,10 @@ def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str)
         stat_info = MARKET_ESPN_MAP.get(market_key)
         if not stat_info:
             return ''
-        cat_frag, stat_frag, human_label = stat_info
+        cat_frag, stat_frags, human_label = stat_info
+        # stat_frags can be a list or a single string for backward compat
+        if isinstance(stat_frags, str):
+            stat_frags = [stat_frags]
         r = requests.get(
             f"{ESPN_BASE}/{sport}/{league}/athletes",
             params={'search': player_name, 'limit': 5},
@@ -324,15 +330,20 @@ def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str)
                 entries    = data.get('splits', {}).get('entries', [])
                 stat_idx, offset = None, 0
                 for cat in categories:
-                    names = cat.get('names', cat.get('labels', []))
+                    # Use names/labels for index alignment; fall back through ESPN's varying fields
+                    idx_names = (cat.get('names') or cat.get('labels') or
+                                 cat.get('displayNames') or cat.get('abbreviations') or [])
                     if cat_frag.lower() in cat.get('name', '').lower():
-                        for i, n in enumerate(names):
-                            if stat_frag.lower() in n.lower():
+                        for i, n in enumerate(idx_names):
+                            n_padded = ' ' + n.lower() + ' '
+                            if any(f.lower() in n_padded or
+                                   f.lower().strip() == n.lower().strip()
+                                   for f in stat_frags):
                                 stat_idx = offset + i
                                 break
                     if stat_idx is not None:
                         break
-                    offset += len(names)
+                    offset += len(idx_names)
                 if stat_idx is not None and entries:
                     vals = []
                     for entry in entries[-5:]:
@@ -365,15 +376,19 @@ def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str)
             if cat_frag.lower() not in cat.get('name', '').lower():
                 continue
             stats = cat.get('stats', [])
+            def matches_stat(name_str):
+                n_padded = ' ' + name_str.lower() + ' '
+                return any(f.lower() in n_padded or f.lower().strip() == name_str.lower().strip()
+                           for f in stat_frags)
             for stat in stats:
                 n = stat.get('name', '')
-                if 'avg' in n.lower() and stat_frag.lower() in n.lower():
+                if 'avg' in n.lower() and matches_stat(n):
                     val = stat.get('displayValue') or str(stat.get('value', ''))
                     if val:
                         return (f"📊 REAL PLAYER DATA (ESPN — season avg): "
                                 f"{display_name} — {human_label}: {val}/game")
             for stat in stats:
-                if stat_frag.lower() in stat.get('name', '').lower():
+                if matches_stat(stat.get('name', '')):
                     val = stat.get('displayValue') or str(stat.get('value', ''))
                     if val:
                         return (f"📊 REAL PLAYER DATA (ESPN — current season): "
@@ -693,19 +708,25 @@ def claude_explain(
             "ALWAYS cite the player's real recent stats provided in the context block — "
             "never substitute generic phrases like 'league average' or 'typical output'. "
             "State the edge, the line, your model's number, and give a one-line take. "
-            "No fluff. Max 4 sentences."
+            "No fluff. Max 4 sentences. "
+            "FORMATTING RULES: No markdown tables (no pipe characters). "
+            "Use plain sentences only. Bold key numbers with **value**."
         ),
         "casual": (
             "You are a friendly sports betting guide. Explain what the numbers mean "
             "in plain English — is this a good bet? Why or why not? "
             "Reference the player's actual recent stats from the context block when available. "
-            "Keep it under 5 sentences."
+            "Keep it under 5 sentences. "
+            "FORMATTING RULES: No markdown tables (no pipe characters). Plain text only."
         ),
         "detailed": (
             "You are a professional sports betting analyst. Give a thorough breakdown: "
-            "what the model projects vs the player's real recent stats (cite them from the context block), "
+            "what the model projects vs the player's real recent stats (cite specific numbers from the context block), "
             "what the market implies, where the edge comes from, "
-            "which book has the best line, and any caveats. Use 6–8 sentences."
+            "which book has the best line, and any caveats. Use 6–8 sentences. "
+            "FORMATTING RULES: No markdown tables (no pipe characters). "
+            "Use bold (**value**) for key numbers. Use dashes (—) for comparisons. "
+            "Never write pipe-separated tables."
         ),
     }
 

@@ -641,14 +641,32 @@
 
             renderAll(games);
 
-            // Auto-refresh scores every 60s while live games are running
-            if (anyLive()) {
-                liveTimer = setInterval(async () => {
-                    await loadScores(sport);
+            // Always poll for score updates — games may start after the page loads.
+            // The badge only renders when scores actually exist, so polling is harmless.
+            liveTimer = setInterval(async () => {
+                await loadScores(sport);
+                // Re-fetch lines; fall back to events if still no odds
+                let fresh = [];
+                try {
                     const r = await fetch(`${API}/game-lines/${sport}`);
-                    renderAll(await r.json());
-                }, 60000);
-            }
+                    fresh = await r.json();
+                } catch {}
+                if (!Array.isArray(fresh) || fresh.length === 0) {
+                    try {
+                        const evRes = await fetch(`${API}/events/${sport}`);
+                        const evts  = await evRes.json();
+                        if (Array.isArray(evts) && evts.length > 0) {
+                            fresh = evts.map(e => ({
+                                id: e.id, sport, home_team: e.home_team,
+                                away_team: e.away_team, commence_time: e.commence_time,
+                                h2h: null, spreads: null, totals: null,
+                                source_book: 'Lines pending',
+                            }));
+                        }
+                    } catch {}
+                }
+                if (fresh.length > 0) renderAll(fresh);
+            }, 60000);
         } catch(e) {
             container.innerHTML = `<div class="empty-state">Could not load lines. Check your Odds API key.</div>`;
         }
