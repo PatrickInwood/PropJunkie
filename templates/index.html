@@ -1306,7 +1306,7 @@
             const raw = americanOdds > 0
                 ? 100 / (americanOdds + 100)
                 : Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
-            prob = raw; // raw implied prob (includes vig)
+            prob = raw * 100; // store as percentage (0-100), same scale as prop legs
         }
         const isFirst = parlayLegs.length === 0;
         parlayLegs.push({
@@ -2005,11 +2005,15 @@
     function mdToHtml(text) {
         return text
             .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g,     '<em>$1</em>')
-            .replace(/^---+$/gm,       '<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">')
-            .replace(/\n{2,}/g,        '<br><br>')
-            .replace(/\n/g,            '<br>');
+            .replace(/\*\*(.+?)\*\*/g,    '<strong>$1</strong>')
+            // Handle unclosed bold at end of line (e.g. **NO LINE at EOF)
+            .replace(/\*\*([^*\n]+)$/gm,  '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g,         '<em>$1</em>')
+            // Clean up any remaining stray asterisks
+            .replace(/\*{1,2}/g,           '')
+            .replace(/^---+$/gm,           '<hr style="border:none;border-top:1px solid var(--border);margin:10px 0">')
+            .replace(/\n{2,}/g,            '<br><br>')
+            .replace(/\n/g,                '<br>');
     }
 
     // ── Utils ─────────────────────────────────────────────────────────

@@ -581,7 +581,7 @@
     function renderAll(games) {
         const container = document.getElementById('linesContainer');
         if (!Array.isArray(games) || games.length === 0) {
-            container.innerHTML = `<div class="empty-state">No upcoming ${SPORT_LABELS[selectedSport]} games found.<br>Check back when the season is active.</div>`;
+            container.innerHTML = `<div class="empty-state">No lines posted yet for ${SPORT_LABELS[selectedSport]}.<br>Odds typically appear a few hours before game time. Try refreshing.</div>`;
             return;
         }
         const groups = groupByDate(games);
@@ -607,7 +607,31 @@
                 fetch(`${API}/game-lines/${sport}`),
                 loadScores(sport),
             ]);
-            const games = await res.json();
+            let games = await res.json();
+
+            // If no odds posted yet, fall back to the events endpoint
+            // so we still show the schedule (with "No line" placeholders)
+            if (!Array.isArray(games) || games.length === 0) {
+                try {
+                    const evRes = await fetch(`${API}/events/${sport}`);
+                    const events = await evRes.json();
+                    if (Array.isArray(events) && events.length > 0) {
+                        // Map events to the same shape renderGame expects
+                        games = events.map(e => ({
+                            id:           e.id,
+                            sport:        sport,
+                            home_team:    e.home_team,
+                            away_team:    e.away_team,
+                            commence_time: e.commence_time,
+                            h2h:          null,
+                            spreads:      null,
+                            totals:       null,
+                            source_book:  'Lines pending',
+                        }));
+                    }
+                } catch { /* events fallback failed — show empty state */ }
+            }
+
             renderAll(games);
 
             // Auto-refresh scores every 60s while live games are running
