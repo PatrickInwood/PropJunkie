@@ -27,7 +27,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context
 
 # Load .env file when running locally
 load_dotenv()
@@ -182,6 +182,13 @@ def analyze():
     home_team  = data.get('home_team')
     away_team  = data.get('away_team')
 
+    # Optional game lines from the frontend (auto-populated when user selects game)
+    game_total  = data.get('game_total')
+    home_spread = data.get('home_spread')
+    away_spread = data.get('away_spread')
+    home_ml     = data.get('home_ml')
+    away_ml     = data.get('away_ml')
+
     # Validate required fields
     if not player or projection is None or not event_id:
         return jsonify({'error': 'Required fields: player, projection, event_id'}), 400
@@ -201,9 +208,33 @@ def analyze():
         )
 
         if 'error' not in result:
+            # Fetch real player stats from ESPN (free, no key, fails silently)
+            player_ctx = fetch_espn_player_context(player, market, sport)
+
+            # Append game lines context so Claude can reference ML/spread/total
+            def fmt_odds(v):
+                if v is None: return None
+                return f"+{v}" if v > 0 else str(v)
+
+            game_parts = []
+            if away_ml is not None and home_ml is not None and away_team and home_team:
+                game_parts.append(
+                    f"ML: {away_team} {fmt_odds(away_ml)} / {home_team} {fmt_odds(home_ml)}"
+                )
+            if away_spread is not None and home_spread is not None and away_team and home_team:
+                a_sp = f"+{away_spread}" if away_spread > 0 else str(away_spread)
+                h_sp = f"+{home_spread}" if home_spread > 0 else str(home_spread)
+                game_parts.append(f"Spread: {away_team} {a_sp} / {home_team} {h_sp}")
+            if game_total is not None:
+                game_parts.append(f"O/U: {game_total}")
+            if game_parts:
+                game_ctx = "🎰 GAME LINES: " + "  |  ".join(game_parts)
+                player_ctx = (player_ctx + "\n" + game_ctx).strip() if player_ctx else game_ctx
+
             result['claude_take'] = claude_explain(
                 result, style=style,
-                home_team=home_team, away_team=away_team
+                home_team=home_team, away_team=away_team,
+                player_context=player_ctx,
             )
 
         return jsonify(result)

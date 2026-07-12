@@ -250,6 +250,140 @@ def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: li
 
 
 # ─────────────────────────────────────────
+# ESPN PLAYER STATS (free, unofficial API)
+# ─────────────────────────────────────────
+
+ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports"
+ESPN_HDR  = {'User-Agent': 'Mozilla/5.0 (compatible; PropJunkie/1.0)'}
+
+ESPN_SPORT_MAP = {
+    'basketball_nba':       ('basketball', 'nba'),
+    'americanfootball_nfl': ('football',   'nfl'),
+    'baseball_mlb':         ('baseball',   'mlb'),
+    'icehockey_nhl':        ('hockey',     'nhl'),
+}
+
+MARKET_ESPN_MAP = {
+    'player_pass_yds':                ('passing',   'passingYards',             'pass yards'),
+    'player_pass_tds':                ('passing',   'passingTouchdowns',        'pass TDs'),
+    'player_rush_yds':                ('rushing',   'rushingYards',             'rush yards'),
+    'player_reception_yds':           ('receiving', 'receivingYards',           'receiving yards'),
+    'player_receptions':              ('receiving', 'receptions',               'receptions'),
+    'player_anytime_td':              ('rushing',   'touchdowns',               'total TDs'),
+    'player_points':                  ('scoring',   'points',                   'points'),
+    'player_rebounds':                ('rebounds',  'rebounds',                 'rebounds'),
+    'player_assists':                 ('general',   'assists',                  'assists'),
+    'player_threes':                  ('general',   'threePointFieldGoalsMade', '3-pointers'),
+    'player_blocks':                  ('general',   'blocks',                   'blocks'),
+    'player_steals':                  ('general',   'steals',                   'steals'),
+    'player_points_rebounds_assists': ('general',   'points',                   'pts+reb+ast'),
+    'player_pitcher_strikeouts':      ('pitching',  'strikeouts',               'strikeouts'),
+    'player_pitcher_outs':            ('pitching',  'outs',                     'outs'),
+    'player_batter_hits':             ('batting',   'hits',                     'hits'),
+    'player_batter_home_runs':        ('batting',   'homeRuns',                 'home runs'),
+    'player_batter_total_bases':      ('batting',   'totalBases',               'total bases'),
+    'player_shots_on_goal':           ('skating',   'shots',                    'shots'),
+    'player_goals':                   ('skating',   'goals',                    'goals'),
+}
+
+
+def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str) -> str:
+    """
+    Fetch player's recent stats from ESPN's unofficial API (free, no key needed).
+    Returns '' on any error — never blocks the main analysis.
+    """
+    try:
+        sport_info = ESPN_SPORT_MAP.get(sport_key)
+        if not sport_info:
+            return ''
+        sport, league = sport_info
+        stat_info = MARKET_ESPN_MAP.get(market_key)
+        if not stat_info:
+            return ''
+        cat_frag, stat_frag, human_label = stat_info
+        r = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/athletes",
+            params={'search': player_name, 'limit': 5},
+            headers=ESPN_HDR, timeout=5
+        )
+        if r.status_code != 200:
+            return ''
+        items = r.json().get('items', [])
+        if not items:
+            return ''
+        athlete_id   = str(items[0]['id'])
+        display_name = items[0].get('displayName', player_name)
+        try:
+            r = requests.get(
+                f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}/gamelog",
+                headers=ESPN_HDR, timeout=6
+            )
+            if r.status_code == 200:
+                data       = r.json()
+                categories = data.get('splits', {}).get('categories', [])
+                entries    = data.get('splits', {}).get('entries', [])
+                stat_idx, offset = None, 0
+                for cat in categories:
+                    names = cat.get('names', cat.get('labels', []))
+                    if cat_frag.lower() in cat.get('name', '').lower():
+                        for i, n in enumerate(names):
+                            if stat_frag.lower() in n.lower():
+                                stat_idx = offset + i
+                                break
+                    if stat_idx is not None:
+                        break
+                    offset += len(names)
+                if stat_idx is not None and entries:
+                    vals = []
+                    for entry in entries[-5:]:
+                        raw = entry.get('stats', [])
+                        if stat_idx < len(raw):
+                            v = str(raw[stat_idx])
+                            try:
+                                float(v.replace(',', ''))
+                                vals.append(v)
+                            except ValueError:
+                                pass
+                    if len(vals) >= 2:
+                        nums = [float(v.replace(',', '')) for v in vals]
+                        avg  = sum(nums) / len(nums)
+                        return (
+                            f"📊 REAL PLAYER DATA (ESPN — cite these, not generic league avgs): "
+                            f"{display_name} last {len(vals)} games — {human_label}: "
+                            f"{', '.join(vals)}  |  recent avg: {avg:.1f}"
+                        )
+        except Exception:
+            pass
+        r = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}/stats",
+            headers=ESPN_HDR, timeout=5
+        )
+        if r.status_code != 200:
+            return ''
+        cats = r.json().get('splits', {}).get('categories', [])
+        for cat in cats:
+            if cat_frag.lower() not in cat.get('name', '').lower():
+                continue
+            stats = cat.get('stats', [])
+            for stat in stats:
+                n = stat.get('name', '')
+                if 'avg' in n.lower() and stat_frag.lower() in n.lower():
+                    val = stat.get('displayValue') or str(stat.get('value', ''))
+                    if val:
+                        return (f"📊 REAL PLAYER DATA (ESPN — season avg): "
+                                f"{display_name} — {human_label}: {val}/game")
+            for stat in stats:
+                if stat_frag.lower() in stat.get('name', '').lower():
+                    val = stat.get('displayValue') or str(stat.get('value', ''))
+                    if val:
+                        return (f"📊 REAL PLAYER DATA (ESPN — current season): "
+                                f"{display_name} — {human_label}: {val}")
+        return ''
+    except Exception:
+        return ''
+
+
+# ─────────────────────────────────────────
 # ODDS MATH
 # ─────────────────────────────────────────
 
@@ -534,6 +668,7 @@ def claude_explain(
     style: str = "sharp",
     home_team: str = None,
     away_team: str = None,
+    player_context: str = "",
 ) -> str:
     """
     Feed analysis result to Claude for a gambler-friendly breakdown.
@@ -546,22 +681,30 @@ def claude_explain(
     home_team / away_team: pass the actual teams from the selected game so
         Claude uses verified matchup context instead of potentially stale
         training-data roster knowledge.
+
+    player_context: real ESPN game-log stats + game lines injected before the prompt
+        so Claude cites actual numbers rather than generic league averages.
     """
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
     style_instructions = {
         "sharp": (
             "You are a sharp sports bettor's assistant. Be terse and data-driven. "
+            "ALWAYS cite the player's real recent stats provided in the context block — "
+            "never substitute generic phrases like 'league average' or 'typical output'. "
             "State the edge, the line, your model's number, and give a one-line take. "
             "No fluff. Max 4 sentences."
         ),
         "casual": (
             "You are a friendly sports betting guide. Explain what the numbers mean "
-            "in plain English — is this a good bet? Why or why not? Keep it under 5 sentences."
+            "in plain English — is this a good bet? Why or why not? "
+            "Reference the player's actual recent stats from the context block when available. "
+            "Keep it under 5 sentences."
         ),
         "detailed": (
             "You are a professional sports betting analyst. Give a thorough breakdown: "
-            "what the model projects, what the market implies, where the edge comes from, "
+            "what the model projects vs the player's real recent stats (cite them from the context block), "
+            "what the market implies, where the edge comes from, "
             "which book has the best line, and any caveats. Use 6–8 sentences."
         ),
     }
@@ -573,9 +716,12 @@ def claude_explain(
     if home_team and away_team:
         matchup_line = f"Game (live from sportsbook API): {away_team} @ {home_team}\n"
 
+    # Inject real player stats + game lines above the prompt
+    context_block = f"{player_context}\n\n" if player_context else ""
+
     # Build the prompt depending on whether we have live lines
     if analysis.get("no_lines"):
-        user_prompt = f"""No live sportsbook lines are available yet for this prop.
+        user_prompt = f"""{context_block}No live sportsbook lines are available yet for this prop.
 Provide a concise contextual analysis focused on the numbers — avoid speculating about the player's current team, recent injuries, or roster situation since that information may be outdated.
 
 {matchup_line}Player: {analysis['player']}
@@ -584,15 +730,15 @@ Market: {analysis['market']}
 My Projection: {analysis['projection']}
 
 Focus on:
-- Whether {analysis['projection']} is a historically reasonable projection for this stat type
+- Whether {analysis['projection']} is a historically reasonable projection for this stat type, referencing the real stats above if available
 - General advice on whether this type of prop tends to be good or bad value (market efficiency for this stat)
 - What line level would make the Over vs Under attractive given this projection
 
-Do NOT make claims about the player's current team, recent game logs, or injury status — your training data may be outdated. Stick to the numbers and stat-type context.
+Do NOT make claims about the player's current team, recent game logs, or injury status beyond what is provided in the context block above.
 
 End with: NO LINE AVAILABLE — check back closer to game time."""
     else:
-        user_prompt = f"""Analyze this prop bet and give your verdict:
+        user_prompt = f"""{context_block}Analyze this prop bet and give your verdict:
 
 {matchup_line}{json.dumps(analysis, indent=2)}
 
@@ -601,6 +747,7 @@ Key things to cover:
 - Model says {analysis['model_prob_over_pct']}% chance of Over, market implies {analysis['implied_prob_over_pct']}%
 - Edge: {analysis['edge_over_pct']}% on Over, {analysis['edge_under_pct']}% on Under
 - Recommendation: {analysis['recommendation']}
+- Reference the player's real recent stats from the context block above — do NOT use generic league average language
 
 The game matchup is provided above from live API data — use it. Do NOT speculate about roster moves or injuries not confirmed in this data.
 

@@ -801,6 +801,12 @@
                 <div class="tab" data-sport="icehockey_nhl">NHL</div>
             </div>
             <div class="game-list" id="gameList"></div>
+
+            <!-- Game Lines Panel (appears after selecting a game) -->
+            <div id="gameLinesPanel" style="display:none;margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;">Game Lines</div>
+                <div id="gameLinesContent" style="font-size:13px;"></div>
+            </div>
         </div>
 
         <!-- PROP ANALYZER -->
@@ -886,6 +892,7 @@
     let selectedAwayTeam  = null;
     let lastResult        = null;
     let parlayLegs        = [];
+    let currentGameLines  = null;
     let toastTimer        = null;
 
     // ── Parlay tray controls ──────────────────────────────────────────
@@ -1232,6 +1239,89 @@
         selectedEventId  = eventId;
         selectedHomeTeam = home;
         selectedAwayTeam = away;
+        currentGameLines = null;
+        fetchGameLines(eventId);
+    }
+
+    async function fetchGameLines(eventId) {
+        const panel   = document.getElementById('gameLinesPanel');
+        const content = document.getElementById('gameLinesContent');
+        panel.style.display = 'block';
+        content.innerHTML = '<span style="color:var(--muted)">Loading lines…</span>';
+        try {
+            const res   = await fetch(`${API}/game-lines/${selectedSport}`);
+            const games = await res.json();
+            const game  = Array.isArray(games) ? games.find(g => g.id === eventId) : null;
+            if (!game) { panel.style.display = 'none'; return; }
+            currentGameLines = game;
+            const away = game.away_team || selectedAwayTeam;
+            const home = game.home_team || selectedHomeTeam;
+            const fmt  = v => v == null ? '—' : (v > 0 ? `+${v}` : `${v}`);
+            const ml   = game.h2h      || {};
+            const sp   = game.spreads  || {};
+            const tot  = game.totals   || {};
+            content.innerHTML = `
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+                    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;">
+                        <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Moneyline</div>
+                        <div style="font-size:12px;color:var(--text);font-weight:600;">${away}</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${fmt(ml.away)}</div>
+                        <button onclick="addGameLineLeg('ml','away',${ml.away},'${away.replace(/'/g,"\\'")} ML')"
+                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        <div style="font-size:12px;color:var(--text);font-weight:600;margin-top:8px;">${home}</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${fmt(ml.home)}</div>
+                        <button onclick="addGameLineLeg('ml','home',${ml.home},'${home.replace(/'/g,"\\'")} ML')"
+                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                    </div>
+                    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;">
+                        <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Spread</div>
+                        <div style="font-size:12px;color:var(--text);font-weight:600;">${away}</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${sp.away_line != null ? (sp.away_line > 0 ? '+' : '') + sp.away_line : '—'} (${fmt(sp.away_odds)})</div>
+                        <button onclick="addGameLineLeg('spread','away',${sp.away_odds},'${away.replace(/'/g,"\\'")} ${sp.away_line > 0 ? '+' : ''}${sp.away_line}')"
+                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        <div style="font-size:12px;color:var(--text);font-weight:600;margin-top:8px;">${home}</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${sp.home_line != null ? (sp.home_line > 0 ? '+' : '') + sp.home_line : '—'} (${fmt(sp.home_odds)})</div>
+                        <button onclick="addGameLineLeg('spread','home',${sp.home_odds},'${home.replace(/'/g,"\\'")} ${sp.home_line > 0 ? '+' : ''}${sp.home_line}')"
+                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                    </div>
+                    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;">
+                        <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Total</div>
+                        <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">O/U ${tot.line ?? '—'}</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);">Over ${fmt(tot.over_odds)}</div>
+                        <button onclick="addGameLineLeg('total','over',${tot.over_odds},'Over ${tot.line}')"
+                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);margin-top:8px;">Under ${fmt(tot.under_odds)}</div>
+                        <button onclick="addGameLineLeg('total','under',${tot.under_odds},'Under ${tot.line}')"
+                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                    </div>
+                </div>`;
+        } catch {
+            panel.style.display = 'none';
+        }
+    }
+
+    function addGameLineLeg(type, side, americanOdds, label) {
+        let prob = null;
+        if (americanOdds != null && !isNaN(americanOdds)) {
+            const raw = americanOdds > 0
+                ? 100 / (americanOdds + 100)
+                : Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
+            prob = raw; // raw implied prob (includes vig)
+        }
+        const isFirst = parlayLegs.length === 0;
+        parlayLegs.push({
+            id: Date.now(),
+            player: label,
+            market: type === 'ml' ? 'Moneyline' : type === 'spread' ? 'Spread' : 'Total',
+            side: side,
+            prob,
+            ctxLabel: `${label} (${americanOdds > 0 ? '+' : ''}${americanOdds})`,
+            ctxCls: '',
+            isGameLine: true,
+        });
+        if (isFirst) openTray();
+        renderParlay();
+        showToast(`✓ ${label} added to parlay`);
     }
 
     // ── Analyze prop ──────────────────────────────────────────────────
@@ -1281,6 +1371,12 @@
                     style:      selectedStyle,
                     home_team:  selectedHomeTeam,
                     away_team:  selectedAwayTeam,
+                    // Game lines (auto-pulled when user selects a game)
+                    game_total:  currentGameLines?.totals?.line      ?? null,
+                    home_spread: currentGameLines?.spreads?.home_line ?? null,
+                    away_spread: currentGameLines?.spreads?.away_line ?? null,
+                    home_ml:     currentGameLines?.h2h?.home          ?? null,
+                    away_ml:     currentGameLines?.h2h?.away          ?? null,
                 })
             });
             const data = await res.json();
@@ -1890,7 +1986,7 @@
             `${lastResult.player} — ${mkt}\n` +
             `Projection: ${lastResult.projection}  |  Line: ${line}  |  Hit Prob: ${prob}\n` +
             `Rec: ${rec}\n\n` +
-            `propjunkie-production.up.railway.app`;
+            `propjunkie.app`;
         navigator.clipboard.writeText(text)
             .then(()  => showToast('✓ Copied to clipboard'))
             .catch(()  => showToast('⚠ Copy failed'));
