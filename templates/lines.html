@@ -483,7 +483,14 @@
     }
 
     function scoreBadge(gameId, home, away) {
-        const g = scoresMap[gameId];
+        // Try ID match first; fall back to team-name match (needed when using events fallback)
+        let g = scoresMap[gameId];
+        if (!g) {
+            g = Object.values(scoresMap).find(s =>
+                (s.home_team === home && s.away_team === away) ||
+                (s.home_team === away && s.away_team === home)
+            );
+        }
         if (!g || !g.scores || g.scores.length === 0) return '';
         const hs = g.scores.find(s => s.name === home)?.score ?? '?';
         const as = g.scores.find(s => s.name === away)?.score ?? '?';
