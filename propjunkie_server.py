@@ -27,7 +27,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context
 
 # Load .env file when running locally
 load_dotenv()
@@ -211,6 +211,11 @@ def analyze():
             # Fetch real player stats from ESPN (free, no key, fails silently)
             player_ctx = fetch_espn_player_context(player, market, sport)
 
+            # Fetch opponent's defensive stats from ESPN (fails silently)
+            defense_ctx = fetch_espn_defense_context(player, market, sport, home_team, away_team)
+            if defense_ctx:
+                player_ctx = (player_ctx + "\n" + defense_ctx).strip() if player_ctx else defense_ctx
+
             # Append game lines context so Claude can reference ML/spread/total
             def fmt_odds(v):
                 if v is None: return None
@@ -316,8 +321,8 @@ def create_checkout():
             payment_method_types = ['card'],
             line_items           = [{'price': price_id, 'quantity': 1}],
             mode                 = 'subscription',
-            success_url          = os.getenv('SUCCESS_URL', 'https://propjunkie-production.up.railway.app/app'),
-            cancel_url           = os.getenv('CANCEL_URL',  'https://propjunkie-production.up.railway.app/#pricing'),
+            success_url          = os.getenv('SUCCESS_URL', 'https://propjunkie.app/app'),
+            cancel_url           = os.getenv('CANCEL_URL',  'https://propjunkie.app/#pricing'),
         )
         return jsonify({'checkout_url': session.url})
 

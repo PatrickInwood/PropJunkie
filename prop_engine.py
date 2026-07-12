@@ -239,6 +239,11 @@ def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: li
         "oddsFormat":  "american",
     }
     resp = requests.get(url, params=params, timeout=10)
+    if resp.status_code in (401, 403):
+        raise ValueError(
+            f"Player prop markets ({', '.join(markets)}) require an upgraded Odds API subscription. "
+            f"Analysis will continue without live sportsbook lines — projection and ESPN data still apply."
+        )
     if resp.status_code == 422:
         raise ValueError(
             f"No odds available for this market on this game. "
@@ -393,6 +398,169 @@ def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str)
                     if val:
                         return (f"📊 REAL PLAYER DATA (ESPN — current season): "
                                 f"{display_name} — {human_label}: {val}")
+        return ''
+    except Exception:
+        return ''
+
+
+# ─────────────────────────────────────────
+# ESPN OPPONENT DEFENSIVE STATS
+# ─────────────────────────────────────────
+
+# Maps market_key → (ESPN team-stats category fragment, [stat name fragments], human label)
+# These are the *opponent's* stats we want (e.g. rush yards allowed against them)
+MARKET_DEF_MAP = {
+    'player_rush_yds':           ('defense',   ['rushingyardsallowed', 'rushyardsallowed', 'rushingyards', 'rushing yards'],  'rush yds allowed/gm'),
+    'player_pass_yds':           ('defense',   ['passingyardsallowed', 'passyardsallowed', 'passingyards', 'passing yards'],  'pass yds allowed/gm'),
+    'player_reception_yds':      ('defense',   ['passingyardsallowed', 'passyardsallowed', 'passingyards'],                    'pass yds allowed/gm'),
+    'player_receptions':         ('defense',   ['receptions', 'rec', 'catches'],                                               'receptions allowed/gm'),
+    'player_anytime_td':         ('defense',   ['touchdownsallowed', 'touchdowns', 'td'],                                     'TDs allowed/gm'),
+    'player_points':             ('defense',   ['pointsallowed', 'points allowed', 'opponentpoints'],                          'pts allowed/gm'),
+    'player_batter_hits':        ('pitching',  [' h ', 'hits'],                                                                'hits allowed/gm'),
+    'player_pitcher_strikeouts': ('pitching',  ['strikeouts', 'so', ' k'],                                                    'K/gm'),
+    'player_batter_home_runs':   ('pitching',  ['homerunsallowed', 'homeruns', 'hr'],                                         'HR allowed/gm'),
+    'player_batter_total_bases': ('pitching',  ['totalbases', 'tb', 'hits'],                                                  'TB/hits allowed/gm'),
+    'player_shots_on_goal':      ('defense',   ['shotsagainst', 'shots', 'shotsallowed'],                                     'shots against/gm'),
+}
+
+
+def fetch_espn_defense_context(
+    player_name: str,
+    market_key:  str,
+    sport_key:   str,
+    home_team:   str,
+    away_team:   str,
+) -> str:
+    """
+    Fetch the opponent's relevant defensive stats from ESPN.
+    Steps:
+      1. Look up player's ESPN team via athlete profile
+      2. Determine which of home_team / away_team is the opponent
+      3. Search ESPN teams for the opponent → get team ID
+      4. Fetch team statistics → find defensive category stat
+    Returns '' on any error — never blocks main analysis.
+    """
+    try:
+        if not home_team or not away_team:
+            return ''
+        sport_info = ESPN_SPORT_MAP.get(sport_key)
+        if not sport_info:
+            return ''
+        sport, league = sport_info
+
+        def_info = MARKET_DEF_MAP.get(market_key)
+        if not def_info:
+            return ''
+        cat_frag, stat_frags, human_label = def_info
+        if isinstance(stat_frags, str):
+            stat_frags = [stat_frags]
+
+        # ── Step 1: find player's team ──────────────────────────────────
+        r = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/athletes",
+            params={'search': player_name, 'limit': 5},
+            headers=ESPN_HDR, timeout=5,
+        )
+        if r.status_code != 200:
+            return ''
+        items = r.json().get('items', [])
+        if not items:
+            return ''
+
+        athlete_id = str(items[0]['id'])
+        r2 = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}",
+            headers=ESPN_HDR, timeout=5,
+        )
+        if r2.status_code != 200:
+            return ''
+
+        ath = r2.json().get('athlete', {})
+        team_data = ath.get('team', {})
+        player_team = (
+            team_data.get('displayName') or
+            team_data.get('name') or
+            team_data.get('shortDisplayName') or ''
+        )
+        if not player_team:
+            return ''
+
+        # ── Step 2: determine opponent ──────────────────────────────────
+        def words_overlap(a: str, b: str) -> bool:
+            """True if any meaningful word appears in both names."""
+            a_words = {w for w in a.lower().split() if len(w) > 2}
+            b_words = {w for w in b.lower().split() if len(w) > 2}
+            return bool(a_words & b_words)
+
+        if words_overlap(player_team, home_team):
+            opponent_name = away_team
+        elif words_overlap(player_team, away_team):
+            opponent_name = home_team
+        else:
+            return ''
+
+        # ── Step 3: search ESPN for opponent team ID ────────────────────
+        r3 = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/teams",
+            params={'search': opponent_name, 'limit': 8},
+            headers=ESPN_HDR, timeout=5,
+        )
+        if r3.status_code != 200:
+            return ''
+
+        raw = r3.json()
+        team_id = None
+
+        # ESPN returns different shapes — handle both
+        candidates = raw.get('items', [])
+        if not candidates:
+            # Try sports → leagues → teams shape
+            for sp in raw.get('sports', []):
+                for lg in sp.get('leagues', []):
+                    for t in lg.get('teams', []):
+                        candidates.append(t.get('team', t))
+
+        for item in candidates:
+            t_name = item.get('displayName') or item.get('name') or ''
+            if words_overlap(opponent_name, t_name):
+                team_id = str(item.get('id', ''))
+                break
+        if not team_id:
+            # fall back: first result
+            if candidates:
+                team_id = str(candidates[0].get('id', ''))
+        if not team_id:
+            return ''
+
+        # ── Step 4: fetch team statistics and find the relevant stat ────
+        r4 = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/teams/{team_id}/statistics",
+            headers=ESPN_HDR, timeout=6,
+        )
+        if r4.status_code != 200:
+            return ''
+
+        cats = r4.json().get('splits', {}).get('categories', [])
+        for cat in cats:
+            if cat_frag.lower() not in cat.get('name', '').lower():
+                continue
+            for stat in cat.get('stats', []):
+                n = stat.get('name', '')
+                n_padded = ' ' + n.lower().replace(' ', '') + ' '
+                n_plain  = ' ' + n.lower() + ' '
+                if any(
+                    f.lower().replace(' ', '') in n_padded or
+                    f.lower() in n_plain or
+                    f.lower().strip() == n.lower().strip()
+                    for f in stat_frags
+                ):
+                    val = stat.get('displayValue') or str(stat.get('value', ''))
+                    if val:
+                        return (
+                            f"🛡️ OPP DEFENSE ({opponent_name}): "
+                            f"{human_label}: **{val}**"
+                        )
+
         return ''
     except Exception:
         return ''
