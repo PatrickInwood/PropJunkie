@@ -20,6 +20,7 @@ Usage:
 """
 
 import os
+import re
 import json
 import math
 import requests
@@ -41,7 +42,6 @@ ODDS_API_BASE   = "https://api.the-odds-api.com/v4"
 def _safe_http_raise(resp):
     """Like raise_for_status() but strips API keys from the error URL."""
     if not resp.ok:
-        import re
         safe_url = re.sub(r'apiKey=[^&\s]+', 'apiKey=***', resp.url)
         raise requests.exceptions.HTTPError(
             f"{resp.status_code} Error: {safe_url}", response=resp
@@ -140,7 +140,7 @@ def get_game_scores(sport_key: str, days_from: int = 1) -> list:
         resp = requests.get(url, params=params, timeout=10)
         if resp.status_code in (422, 404):
             return []
-        resp.raise_for_status()
+        _safe_http_raise(resp)
         return resp.json()
     except requests.exceptions.RequestException as e:
         print(f"[PropJunkie] Scores API error for {sport_key}: {e}")
@@ -260,7 +260,7 @@ def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: li
             f"The sportsbooks may not have posted lines yet, or this market "
             f"({', '.join(markets)}) isn't offered for this event."
         )
-    resp.raise_for_status()
+    _safe_http_raise(resp)
     return resp.json()
 
 
@@ -849,7 +849,7 @@ def scan_props(prop_list: list, sport_key: str, event_id: str, min_edge: float =
             sport_key   = sport_key,
             event_id    = event_id,
         )
-        if "error" not in result:
+        if "error" not in result and not result.get("no_lines"):
             max_edge = max(result["edge_over_pct"], result["edge_under_pct"])
             if max_edge >= min_edge * 100:
                 results.append(result)
