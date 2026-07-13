@@ -1,10 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PropJunkie — Live Lines</title>
+    <meta property="og:title" content="PropJunkie — Live Lines">
+    <meta property="og:description" content="Moneyline, spread, and total lines for upcoming games — updated in real time.">
+    <meta property="og:url" content="https://propjunkie.app/lines">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="PropJunkie — Live Lines">
+    <meta name="twitter:description" content="Moneyline, spread, and total lines for upcoming games — updated in real time.">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -14,20 +24,40 @@
             --surface2: #1a2218;
             --border: #1e2a1a;
             --accent: #c9a84c;
-            --accent-hover: #a8893a;
-            --accent-glow: rgba(201, 168, 76, 0.2);
+            --accent-hover: #dbb85c;
+            --accent-glow: rgba(201, 168, 76, 0.15);
             --green: #10b981;
             --red: #ef4444;
             --yellow: #f59e0b;
             --text: #e8ecf4;
+            --text-2: #b8c8b6;
             --muted: #4a6a44;
+            --header-bg: rgba(12, 15, 10, 0.95);
+        }
+
+        html[data-theme="light"] {
+            --bg:           #f4f0e8;
+            --surface:      #ffffff;
+            --surface2:     #ede9e0;
+            --border:       #d8d2c4;
+            --accent:       #a07c28;
+            --accent-hover: #886618;
+            --accent-glow:  rgba(160, 124, 40, 0.12);
+            --green:        #166c4a;
+            --red:          #b52020;
+            --yellow:       #9a5e08;
+            --text:         #1a1a14;
+            --text-2:       #4a5040;
+            --muted:        #7a7255;
+            --header-bg:    rgba(244, 240, 232, 0.95);
         }
 
         body {
             background: var(--bg);
             color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             min-height: 100vh;
+            transition: background 0.25s ease, color 0.25s ease;
         }
 
         /* ── Header ── */
@@ -38,11 +68,13 @@
             padding: 0 32px;
             height: 60px;
             border-bottom: 1px solid var(--border);
-            background: rgba(8,8,15,0.95);
+            background: var(--header-bg);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             position: sticky;
             top: 0;
             z-index: 100;
+            transition: background 0.25s ease, border-color 0.25s ease;
         }
         .logo {
             font-size: 22px;
@@ -63,7 +95,7 @@
         .nav-link.active { color: var(--text); }
         .btn-nav {
             background: var(--accent);
-            color: #fff;
+            color: #0c0f0a;
             border: none;
             padding: 8px 18px;
             border-radius: 8px;
@@ -74,6 +106,32 @@
             transition: background 0.15s;
         }
         .btn-nav:hover { background: var(--accent-hover); }
+        html[data-theme="light"] .btn-nav { color: #fff; }
+
+        /* ── Theme toggle ── */
+        .theme-toggle {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 3px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            gap: 1px;
+            transition: border-color 0.15s;
+            user-select: none;
+        }
+        .theme-toggle:hover { border-color: var(--accent); }
+        .t-opt {
+            padding: 4px 11px;
+            border-radius: 18px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--muted);
+            letter-spacing: 0.3px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .t-opt.active { background: var(--surface); color: var(--text); }
 
         /* ── Page layout ── */
         .container {
@@ -317,6 +375,10 @@
     <div class="nav-links">
         <a href="/lines" class="nav-link active">Lines</a>
         <a href="/app" class="nav-link">Prop Analyzer</a>
+        <div class="theme-toggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
+            <div class="t-opt active" id="tDark">🌙 Dark</div>
+            <div class="t-opt" id="tLight">☀️ Light</div>
+        </div>
         <a href="/app" class="btn-nav">Analyze Props →</a>
     </div>
 </header>
@@ -350,6 +412,25 @@
 <script>
     const API = '';
     let selectedSport = 'baseball_mlb';
+
+    // ── Theme ────────────────────────────────────────────────────────
+    function toggleTheme() {
+        const html  = document.documentElement;
+        const isDark = html.getAttribute('data-theme') !== 'light';
+        const next   = isDark ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('pj-theme', next);
+        updateToggleUI(next);
+    }
+    function updateToggleUI(theme) {
+        document.getElementById('tDark').classList.toggle('active', theme === 'dark');
+        document.getElementById('tLight').classList.toggle('active', theme === 'light');
+    }
+    (function initTheme() {
+        const saved = localStorage.getItem('pj-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+        updateToggleUI(saved);
+    })();
 
     // ── Team logos (ESPN CDN) ────────────────────────────────────────
     const TEAM_ABBREVS = {

@@ -22,6 +22,7 @@ Run in production (Railway):
 """
 
 import os
+import time
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -114,7 +115,11 @@ def game_scores(sport):
 
 # ─────────────────────────────────────────
 # GAME LINES — ML, spreads, totals
+# 5-minute server-side cache to conserve Odds API quota
 # ─────────────────────────────────────────
+
+_lines_cache: dict = {}   # sport_key → {'data': list, 'ts': float}
+_LINES_TTL = 300          # seconds
 
 @app.route('/game-lines/<sport>', methods=['GET'])
 @limiter.limit("20 per minute")
@@ -122,9 +127,15 @@ def game_lines(sport):
     """
     GET /game-lines/basketball_nba
     Returns moneyline, spread, and totals for upcoming games.
+    Responses are cached for 5 minutes to conserve API quota.
     """
+    now = time.time()
+    cached = _lines_cache.get(sport)
+    if cached and (now - cached['ts']) < _LINES_TTL:
+        return jsonify(cached['data'])
     try:
         data = get_game_lines(sport)
+        _lines_cache[sport] = {'data': data, 'ts': now}
         return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

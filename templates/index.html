@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PropJunkie — AI Prop Analyzer</title>
+    <meta property="og:title" content="PropJunkie — Beat the Book with AI">
+    <meta property="og:description" content="AI-powered prop bet analysis. Live sportsbook lines, real ESPN player stats, and Claude AI analysis in seconds.">
+    <meta property="og:url" content="https://propjunkie.app/app">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="PropJunkie — Beat the Book with AI">
+    <meta name="twitter:description" content="AI-powered prop bet analysis. Live sportsbook lines, real ESPN player stats, and Claude AI analysis in seconds.">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1252,7 +1259,13 @@
             const res   = await fetch(`${API}/game-lines/${selectedSport}`);
             const games = await res.json();
             const game  = Array.isArray(games) ? games.find(g => g.id === eventId) : null;
-            if (!game) { panel.style.display = 'none'; return; }
+
+            // No matching game in odds response — show pending message rather than hiding panel
+            if (!game) {
+                content.innerHTML = '<span style="color:var(--muted);font-size:12px;">Lines not posted yet — check back closer to game time.</span>';
+                return;
+            }
+
             currentGameLines = game;
             const away = game.away_team || selectedAwayTeam;
             const home = game.home_team || selectedHomeTeam;
@@ -1260,43 +1273,47 @@
             const ml   = game.h2h      || {};
             const sp   = game.spreads  || {};
             const tot  = game.totals   || {};
+
+            // Helper: render a "+ Parlay" button only when odds are available
+            const parlayBtn = (type, side, odds, label) => odds == null ? '' :
+                `<button onclick="addGameLineLeg('${type}','${side}',${odds},'${label}')"
+                    style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;font-family:inherit;">+ Parlay</button>`;
+
+            // Spread label — guard against null line
+            const spAwayLabel = sp.away_line != null ? `${away.replace(/'/g,"\\'")} ${sp.away_line > 0 ? '+' : ''}${sp.away_line}` : `${away.replace(/'/g,"\\'")} spread`;
+            const spHomeLabel = sp.home_line != null ? `${home.replace(/'/g,"\\'")} ${sp.home_line > 0 ? '+' : ''}${sp.home_line}` : `${home.replace(/'/g,"\\'")} spread`;
+
             content.innerHTML = `
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
                     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;">
                         <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Moneyline</div>
                         <div style="font-size:12px;color:var(--text);font-weight:600;">${away}</div>
                         <div style="font-size:15px;font-weight:700;color:var(--accent);">${fmt(ml.away)}</div>
-                        <button onclick="addGameLineLeg('ml','away',${ml.away},'${away.replace(/'/g,"\\'")} ML')"
-                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        ${parlayBtn('ml','away', ml.away, `${away.replace(/'/g,"\\'")} ML`)}
                         <div style="font-size:12px;color:var(--text);font-weight:600;margin-top:8px;">${home}</div>
                         <div style="font-size:15px;font-weight:700;color:var(--accent);">${fmt(ml.home)}</div>
-                        <button onclick="addGameLineLeg('ml','home',${ml.home},'${home.replace(/'/g,"\\'")} ML')"
-                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        ${parlayBtn('ml','home', ml.home, `${home.replace(/'/g,"\\'")} ML`)}
                     </div>
                     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;">
                         <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Spread</div>
                         <div style="font-size:12px;color:var(--text);font-weight:600;">${away}</div>
-                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${sp.away_line != null ? (sp.away_line > 0 ? '+' : '') + sp.away_line : '—'} (${fmt(sp.away_odds)})</div>
-                        <button onclick="addGameLineLeg('spread','away',${sp.away_odds},'${away.replace(/'/g,"\\'")} ${sp.away_line > 0 ? '+' : ''}${sp.away_line}')"
-                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${sp.away_line != null ? (sp.away_line > 0 ? '+' : '') + sp.away_line : '—'} ${sp.away_odds != null ? '(' + fmt(sp.away_odds) + ')' : ''}</div>
+                        ${parlayBtn('spread','away', sp.away_odds, spAwayLabel)}
                         <div style="font-size:12px;color:var(--text);font-weight:600;margin-top:8px;">${home}</div>
-                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${sp.home_line != null ? (sp.home_line > 0 ? '+' : '') + sp.home_line : '—'} (${fmt(sp.home_odds)})</div>
-                        <button onclick="addGameLineLeg('spread','home',${sp.home_odds},'${home.replace(/'/g,"\\'")} ${sp.home_line > 0 ? '+' : ''}${sp.home_line}')"
-                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        <div style="font-size:15px;font-weight:700;color:var(--accent);">${sp.home_line != null ? (sp.home_line > 0 ? '+' : '') + sp.home_line : '—'} ${sp.home_odds != null ? '(' + fmt(sp.home_odds) + ')' : ''}</div>
+                        ${parlayBtn('spread','home', sp.home_odds, spHomeLabel)}
                     </div>
                     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;">
                         <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Total</div>
                         <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">O/U ${tot.line ?? '—'}</div>
                         <div style="font-size:15px;font-weight:700;color:var(--accent);">Over ${fmt(tot.over_odds)}</div>
-                        <button onclick="addGameLineLeg('total','over',${tot.over_odds},'Over ${tot.line}')"
-                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        ${parlayBtn('total','over', tot.over_odds, `Over ${tot.line ?? '?'}`)}
                         <div style="font-size:15px;font-weight:700;color:var(--accent);margin-top:8px;">Under ${fmt(tot.under_odds)}</div>
-                        <button onclick="addGameLineLeg('total','under',${tot.under_odds},'Under ${tot.line}')"
-                            style="margin-top:6px;font-size:10px;padding:3px 8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--accent);border-radius:4px;cursor:pointer;">+ Parlay</button>
+                        ${parlayBtn('total','under', tot.under_odds, `Under ${tot.line ?? '?'}`)}
                     </div>
                 </div>`;
         } catch {
-            panel.style.display = 'none';
+            content.innerHTML = '<span style="color:var(--muted);font-size:12px;">Could not load lines.</span>';
         }
     }
 

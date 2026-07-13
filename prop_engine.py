@@ -38,6 +38,16 @@ ANTHROPIC_KEY   = os.getenv("ANTHROPIC_API_KEY", "YOUR_ANTHROPIC_KEY")
 ODDS_API_BASE   = "https://api.the-odds-api.com/v4"
 
 
+def _safe_http_raise(resp):
+    """Like raise_for_status() but strips API keys from the error URL."""
+    if not resp.ok:
+        import re
+        safe_url = re.sub(r'apiKey=[^&\s]+', 'apiKey=***', resp.url)
+        raise requests.exceptions.HTTPError(
+            f"{resp.status_code} Error: {safe_url}", response=resp
+        )
+
+
 # ─────────────────────────────────────────
 # SUPPORTED STAT MARKETS
 # (The Odds API market keys)
@@ -102,7 +112,7 @@ def get_events(sport_key: str) -> list:
     """
     url = f"{ODDS_API_BASE}/sports/{sport_key}/events"
     resp = requests.get(url, params={"apiKey": ODDS_API_KEY}, timeout=10)
-    resp.raise_for_status()
+    _safe_http_raise(resp)
     return resp.json()
 
 
@@ -152,7 +162,7 @@ def get_game_lines(sport_key: str) -> list:
     resp = requests.get(url, params=params, timeout=10)
     if resp.status_code in (422, 404):
         return []
-    resp.raise_for_status()
+    _safe_http_raise(resp)
 
     PREFERRED_BOOKS = ["draftkings", "fanduel", "betmgm", "betrivers", "bovada"]
     results = []
@@ -277,7 +287,7 @@ MARKET_ESPN_MAP = {
     'player_rush_yds':                ('rushing',   ['rushingyards', 'yds', 'yards'],           'rush yards'),
     'player_reception_yds':           ('receiving', ['receivingyards', 'yds', 'yards'],         'receiving yards'),
     'player_receptions':              ('receiving', ['receptions', 'rec'],                      'receptions'),
-    'player_anytime_td':              ('rushing',   ['touchdowns', 'td'],                       'total TDs'),
+    'player_anytime_td':              ('scoring',   ['touchdowns', 'td', 'tds'],               'total TDs'),
     'player_points':                  ('scoring',   ['points', 'pts'],                          'points'),
     'player_rebounds':                ('rebounds',  ['rebounds', 'reb'],                        'rebounds'),
     'player_assists':                 ('general',   ['assists', 'ast'],                         'assists'),
@@ -290,6 +300,10 @@ MARKET_ESPN_MAP = {
     'player_batter_hits':             ('batting',   [' h ', 'hits', ' h\t'],                   'hits'),
     'player_batter_home_runs':        ('batting',   ['hr', 'homeruns', 'home runs'],            'home runs'),
     'player_batter_total_bases':      ('batting',   ['totalbases', 'tb'],                       'total bases'),
+    'player_batter_rbis':             ('batting',   ['rbi', 'rbis', 'runsbattedin'],            'RBIs'),
+    'player_batter_runs_scored':      ('batting',   [' r ', 'runs', 'runsscored'],              'runs scored'),
+    'player_batter_stolen_bases':     ('batting',   ['stolenbases', 'sb', ' sb '],              'stolen bases'),
+    'player_pitcher_hits_allowed':    ('pitching',  [' h ', 'hits', 'hitsallowed'],             'hits allowed'),
     'player_shots_on_goal':           ('skating',   ['shots', 'sog'],                           'shots'),
     'player_goals':                   ('skating',   ['goals', ' g '],                           'goals'),
 }
@@ -416,11 +430,14 @@ MARKET_DEF_MAP = {
     'player_receptions':         ('defense',   ['receptions', 'rec', 'catches'],                                               'receptions allowed/gm'),
     'player_anytime_td':         ('defense',   ['touchdownsallowed', 'touchdowns', 'td'],                                     'TDs allowed/gm'),
     'player_points':             ('defense',   ['pointsallowed', 'points allowed', 'opponentpoints'],                          'pts allowed/gm'),
-    'player_batter_hits':        ('pitching',  [' h ', 'hits'],                                                                'hits allowed/gm'),
-    'player_pitcher_strikeouts': ('pitching',  ['strikeouts', 'so', ' k'],                                                    'K/gm'),
-    'player_batter_home_runs':   ('pitching',  ['homerunsallowed', 'homeruns', 'hr'],                                         'HR allowed/gm'),
-    'player_batter_total_bases': ('pitching',  ['totalbases', 'tb', 'hits'],                                                  'TB/hits allowed/gm'),
-    'player_shots_on_goal':      ('defense',   ['shotsagainst', 'shots', 'shotsallowed'],                                     'shots against/gm'),
+    'player_batter_hits':          ('pitching',  [' h ', 'hits'],                                 'hits allowed/gm'),
+    'player_pitcher_strikeouts':   ('pitching',  ['strikeouts', 'so', ' k'],                     'K/gm'),
+    'player_pitcher_hits_allowed': ('pitching',  [' h ', 'hits'],                                'hits allowed/gm'),
+    'player_batter_home_runs':     ('pitching',  ['homerunsallowed', 'homeruns', 'hr'],           'HR allowed/gm'),
+    'player_batter_total_bases':   ('pitching',  ['totalbases', 'tb', 'hits'],                   'TB/hits allowed/gm'),
+    'player_batter_rbis':          ('pitching',  ['earnedrunsallowed', 'era', 'runs'],            'runs allowed/gm'),
+    'player_batter_runs_scored':   ('pitching',  ['earnedrunsallowed', 'era', 'runs'],            'runs allowed/gm'),
+    'player_shots_on_goal':        ('defense',   ['shotsagainst', 'shots', 'shotsallowed'],       'shots against/gm'),
 }
 
 
