@@ -606,14 +606,6 @@ def remove_vig(over_odds: float, under_odds: float) -> tuple[float, float]:
     return raw_over / total, raw_under / total
 
 
-def prob_to_american(prob: float) -> str:
-    """Convert probability back to American odds format for display."""
-    if prob >= 0.5:
-        return f"-{round((prob / (1 - prob)) * 100)}"
-    else:
-        return f"+{round(((1 - prob) / prob) * 100)}"
-
-
 # ─────────────────────────────────────────
 # PROBABILITY MODEL
 # ─────────────────────────────────────────
@@ -639,40 +631,56 @@ def calculate_hit_probability(projection: float, line: float, std_dev_pct: float
     return float(1 - stats.norm.cdf(z))
 
 
-# Suggested std_dev_pct defaults by stat type
+# Suggested std_dev_pct defaults by (sport_key, market_key).
+#
+# Keyed by sport AS WELL AS market because NBA and NHL share the market keys
+# `player_points` and `player_assists` — a market-only dict silently collapsed
+# those to the NHL values, so NBA points/assists were scored with ~double the
+# intended volatility. Look these up via get_std_dev_pct().
 STD_DEV_DEFAULTS = {
     # NBA
-    "player_points":                        0.28,
-    "player_rebounds":                      0.32,
-    "player_assists":                       0.35,
-    "player_threes":                        0.55,
-    "player_blocks":                        0.60,
-    "player_steals":                        0.65,
-    "player_points_rebounds_assists":       0.22,
+    ("basketball_nba", "player_points"):                   0.28,
+    ("basketball_nba", "player_rebounds"):                 0.32,
+    ("basketball_nba", "player_assists"):                  0.35,
+    ("basketball_nba", "player_threes"):                   0.55,
+    ("basketball_nba", "player_blocks"):                   0.60,
+    ("basketball_nba", "player_steals"):                   0.65,
+    ("basketball_nba", "player_points_rebounds_assists"):  0.22,
     # NFL
-    "player_pass_yds":                      0.26,
-    "player_pass_tds":                      0.65,
-    "player_rush_yds":                      0.40,
-    "player_reception_yds":                 0.45,
-    "player_receptions":                    0.40,
-    "player_anytime_td":                    0.70,
+    ("americanfootball_nfl", "player_pass_yds"):           0.26,
+    ("americanfootball_nfl", "player_pass_tds"):           0.65,
+    ("americanfootball_nfl", "player_rush_yds"):           0.40,
+    ("americanfootball_nfl", "player_reception_yds"):      0.45,
+    ("americanfootball_nfl", "player_receptions"):         0.40,
+    ("americanfootball_nfl", "player_anytime_td"):         0.70,
     # MLB — pitchers
-    "player_pitcher_strikeouts":            0.30,
-    "player_pitcher_outs":                  0.28,
-    "player_pitcher_hits_allowed":          0.35,
+    ("baseball_mlb", "player_pitcher_strikeouts"):         0.30,
+    ("baseball_mlb", "player_pitcher_outs"):               0.28,
+    ("baseball_mlb", "player_pitcher_hits_allowed"):       0.35,
     # MLB — batters (rare events = high variance)
-    "player_batter_home_runs":              0.90,
-    "player_batter_hits":                   0.45,
-    "player_batter_total_bases":            0.50,
-    "player_batter_rbis":                   0.70,
-    "player_batter_runs_scored":            0.65,
-    "player_batter_stolen_bases":           0.80,
+    ("baseball_mlb", "player_batter_home_runs"):           0.90,
+    ("baseball_mlb", "player_batter_hits"):                0.45,
+    ("baseball_mlb", "player_batter_total_bases"):         0.50,
+    ("baseball_mlb", "player_batter_rbis"):                0.70,
+    ("baseball_mlb", "player_batter_runs_scored"):         0.65,
+    ("baseball_mlb", "player_batter_stolen_bases"):        0.80,
     # NHL
-    "player_shots_on_goal":                 0.35,
-    "player_goals":                         0.80,
-    "player_assists":                       0.70,
-    "player_points":                        0.55,
+    ("icehockey_nhl", "player_shots_on_goal"):             0.35,
+    ("icehockey_nhl", "player_goals"):                     0.80,
+    ("icehockey_nhl", "player_assists"):                   0.70,
+    ("icehockey_nhl", "player_points"):                    0.55,
 }
+
+# Fallback volatility when a (sport, market) pair isn't in the table above.
+DEFAULT_STD_DEV_PCT = 0.25
+
+
+def get_std_dev_pct(sport_key: str, market_key: str) -> float:
+    """Return the modelled game-to-game volatility for a (sport, market) pair.
+
+    Falls back to DEFAULT_STD_DEV_PCT for anything not explicitly listed.
+    """
+    return STD_DEV_DEFAULTS.get((sport_key, market_key), DEFAULT_STD_DEV_PCT)
 
 
 # ─────────────────────────────────────────
@@ -706,11 +714,14 @@ def best_line(props: list, side: str = "over") -> dict | None:
     """
     Given a list of bookmaker props, return the one with the best odds for your chosen side.
     side = 'over' or 'under'
+
+    Higher American odds are always the better payout for the bettor
+    (+150 > +120 > -110 > -130), so the best line is simply the max.
     """
     if not props:
         return None
     key = "over_odds" if side == "over" else "under_odds"
-    return max(props, key=lambda p: p[key] if p[key] < 0 else p[key])
+    return max(props, key=lambda p: p[key])
 
 
 # ─────────────────────────────────────────
@@ -739,9 +750,10 @@ def analyze_prop(
     Returns:
         Analysis dict with probabilities, edge, and recommendation
     """
-    # Use stat-specific std dev if not overridden
+    # Use stat-specific std dev if not overridden.
+    # Keyed by (sport, market) so NBA and NHL points/assists don't collide.
     if std_dev_pct is None:
-        std_dev_pct = STD_DEV_DEFAULTS.get(market_key, 0.25)
+        std_dev_pct = get_std_dev_pct(sport_key, market_key)
 
     # Pull lines — fall back gracefully if API has no lines for this market/event
     props = []
