@@ -24,13 +24,17 @@ Run in production (Railway):
 import os
 import time
 import logging
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context
-from models import db
+from models import db, User
+from forms import SignupForm, SPORT_CHOICES
+from emails import send_welcome_email
 
 # Load .env file when running locally
 load_dotenv()
@@ -70,6 +74,21 @@ if _db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 
 db.init_app(app)
+
+# ── Login sessions (Flask-Login) ──
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Flask-Login calls this on each request to reload the logged-in user."""
+    try:
+        return db.session.get(User, int(user_id))
+    except (TypeError, ValueError):
+        # Malformed session id (e.g. a tampered cookie) — treat as logged out.
+        return None
+
 
 # Create any missing tables on startup. Safe to run every boot — it only
 # creates tables that don't already exist, and never drops or alters data.
@@ -121,6 +140,55 @@ def privacy_page():
 @limiter.exempt
 def terms_page():
     return render_template('terms.html')
+
+
+# ─────────────────────────────────────────
+# AUTH — signup, logout
+# ─────────────────────────────────────────
+
+@app.route('/signup', methods=['GET', 'POST'])
+@limiter.limit("10 per hour", methods=['POST'])
+def signup():
+    # Already signed in? Skip straight to the app.
+    if current_user.is_authenticated:
+        return redirect(url_for('app_page'))
+
+    form = SignupForm()
+    if form.validate_on_submit():
+        try:
+            user = User.create_account(
+                email=form.email.data,
+                password=form.password.data,
+                name=form.name.data or None,
+                favorite_sports=",".join(form.favorite_sports.data) or None,
+                referral_source=form.referral_source.data or None,
+                date_of_birth=form.date_of_birth.data,
+            )
+        except IntegrityError:
+            # Rare race: someone registered this email between the form's
+            # uniqueness check and this insert. Roll back and show the
+            # normal "already exists" error instead of crashing with a 500.
+            db.session.rollback()
+            form.email.errors.append("An account with this email already exists.")
+        else:
+            # "Let them in right away" — start a logged-in session immediately.
+            login_user(user)
+            # Welcome email is fire-and-forget: it never blocks or breaks signup.
+            send_welcome_email(user)
+            return redirect(url_for('app_page'))
+
+    # GET, or a POST that failed validation (errors render on the form).
+    min_age = int(os.getenv("MIN_AGE", "21"))
+    return render_template('signup.html', form=form, min_age=min_age, sport_choices=SPORT_CHOICES)
+
+
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    # POST-only (with CSRF token) so another site can't force-log-out users
+    # via a plain link or an <img> tag pointed at /logout.
+    logout_user()
+    return redirect(url_for('landing'))
 
 
 # ─────────────────────────────────────────

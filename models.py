@@ -15,6 +15,7 @@ importable on its own (e.g. from tests) without spinning up the whole server.
 
 from datetime import date, datetime, timezone
 
+from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import validates
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -23,8 +24,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 
-class User(db.Model):
-    """A registered PropJunkie user."""
+class User(UserMixin, db.Model):
+    """A registered PropJunkie user.
+
+    UserMixin adds the properties Flask-Login needs to track a logged-in
+    session (is_authenticated, get_id, etc.) — no extra code required.
+    """
 
     __tablename__ = "users"
 
@@ -77,6 +82,35 @@ class User(db.Model):
     def check_password(self, raw_password: str) -> bool:
         """Return True if raw_password matches the stored hash."""
         return check_password_hash(self.password_hash, raw_password)
+
+    # ── Account creation ─────────────────────────────────────────────
+    @classmethod
+    def create_account(
+        cls,
+        *,
+        email: str,
+        password: str,
+        date_of_birth,
+        name: str = None,
+        favorite_sports: str = None,
+        referral_source: str = None,
+    ) -> "User":
+        """Create, hash-protect, and persist a new user, then return it.
+
+        Email is normalized automatically (see the email validator). Assumes
+        the caller has already validated the input (age, password rules, etc.).
+        """
+        user = cls(
+            email=email,
+            name=name,
+            favorite_sports=favorite_sports,
+            referral_source=referral_source,
+            date_of_birth=date_of_birth,
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        return user
 
     # ── Age gate ─────────────────────────────────────────────────────
     @property
