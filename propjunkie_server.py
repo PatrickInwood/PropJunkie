@@ -30,6 +30,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context
+from models import db
 
 # Load .env file when running locally
 load_dotenv()
@@ -42,6 +43,38 @@ logger = logging.getLogger("propjunkie")
 # Generic message returned to clients on unexpected errors — the real
 # exception is logged server-side, never leaked in the HTTP response.
 _GENERIC_ERROR = "Something went wrong. Please try again."
+
+# ─────────────────────────────────────────
+# DATABASE + SESSION CONFIG (user accounts)
+# ─────────────────────────────────────────
+# SECRET_KEY signs login sessions and email links. It MUST be a real, secret
+# value in production. Rather than silently fall back to a public placeholder
+# (which would let anyone forge a logged-in session), we refuse to boot in
+# production without it. Local dev — with no production markers set — is allowed
+# an insecure default so it stays zero-config.
+_secret_key = os.getenv("SECRET_KEY")
+if not _secret_key:
+    _in_production = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("DATABASE_URL"))
+    if _in_production:
+        raise RuntimeError("SECRET_KEY environment variable must be set in production")
+    _secret_key = "dev-insecure-change-me"  # local development only
+app.config["SECRET_KEY"] = _secret_key
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# In production Railway injects DATABASE_URL. Locally it's blank, so we fall
+# back to a SQLite file (a simple, zero-setup database stored on disk).
+_db_url = os.getenv("DATABASE_URL") or "sqlite:///propjunkie.db"
+# Railway-style URLs start with postgres://, but SQLAlchemy wants postgresql://
+if _db_url.startswith("postgres://"):
+    _db_url = _db_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
+
+db.init_app(app)
+
+# Create any missing tables on startup. Safe to run every boot — it only
+# creates tables that don't already exist, and never drops or alters data.
+with app.app_context():
+    db.create_all()
 
 # ─────────────────────────────────────────
 # RATE LIMITING

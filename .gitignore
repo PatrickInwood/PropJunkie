@@ -12,5 +12,9 @@ env/
 # Secrets — never commit real keys
 .env
 
+# Local database (SQLite dev file lives in Flask's instance/ folder)
+instance/
+*.db
+
 # OS
 .DS_Store
