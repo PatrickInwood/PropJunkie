@@ -23,6 +23,7 @@ Run in production (Railway):
 
 import os
 import time
+import logging
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -35,6 +36,12 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+logger = logging.getLogger("propjunkie")
+
+# Generic message returned to clients on unexpected errors — the real
+# exception is logged server-side, never leaked in the HTTP response.
+_GENERIC_ERROR = "Something went wrong. Please try again."
 
 # ─────────────────────────────────────────
 # RATE LIMITING
@@ -109,8 +116,9 @@ def game_scores(sport):
         days_from = int(request.args.get('daysFrom', 1))
         data = get_game_scores(sport, days_from=days_from)
         return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        logger.exception("Error fetching scores for %s", sport)
+        return jsonify({'error': _GENERIC_ERROR}), 500
 
 
 # ─────────────────────────────────────────
@@ -137,8 +145,9 @@ def game_lines(sport):
         data = get_game_lines(sport)
         _lines_cache[sport] = {'data': data, 'ts': now}
         return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        logger.exception("Error fetching game lines for %s", sport)
+        return jsonify({'error': _GENERIC_ERROR}), 500
 
 
 # ─────────────────────────────────────────
@@ -157,8 +166,9 @@ def events(sport):
     try:
         data = get_events(sport)
         return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        logger.exception("Error fetching events for %s", sport)
+        return jsonify({'error': _GENERIC_ERROR}), 500
 
 
 # ─────────────────────────────────────────
@@ -255,8 +265,9 @@ def analyze():
 
         return jsonify(result)
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        logger.exception("Error analyzing prop for player=%s", player)
+        return jsonify({'error': _GENERIC_ERROR}), 500
 
 
 # ─────────────────────────────────────────
@@ -291,8 +302,9 @@ def scan():
     try:
         results = scan_props(props, sport, event_id, min_edge=min_edge)
         return jsonify({'results': results, 'count': len(results)})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        logger.exception("Error scanning props for event=%s", event_id)
+        return jsonify({'error': _GENERIC_ERROR}), 500
 
 
 # ─────────────────────────────────────────
@@ -338,9 +350,11 @@ def create_checkout():
         return jsonify({'checkout_url': session.url})
 
     except ImportError:
-        return jsonify({'error': 'Stripe not installed. Run: pip install stripe'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Stripe library not installed")
+        return jsonify({'error': _GENERIC_ERROR}), 500
+    except Exception:
+        logger.exception("Error creating checkout session")
+        return jsonify({'error': _GENERIC_ERROR}), 500
 
 
 # ─────────────────────────────────────────
