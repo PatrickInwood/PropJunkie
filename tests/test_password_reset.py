@@ -122,6 +122,25 @@ class TestResetPassword:
         assert r.status_code == 200
         assert b"match" in r.data
 
+    def test_logged_in_user_can_still_reset(self, client):
+        # Reproduces the reported bug: clicking a reset link while already
+        # signed in must show the form (not bounce to /app), and after reset
+        # the session is ended so the user logs in fresh.
+        _make_user(password="oldpassword1")
+        client.post("/login", data={"email": "reset@example.com", "password": "oldpassword1"})
+        token = _token_for()
+
+        shown = client.get(f"/reset-password/{token}")
+        assert shown.status_code == 200
+        assert b"Set a new password" in shown.data
+
+        done = client.post(
+            f"/reset-password/{token}",
+            data={"password": "newpassword1", "confirm_password": "newpassword1"},
+        )
+        assert done.status_code == 302
+        assert client.get("/account").status_code == 302   # logged out after reset
+
     def test_weak_new_password_rejected(self, client):
         _make_user()
         r = client.post(

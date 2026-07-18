@@ -287,9 +287,9 @@ def forgot_password():
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 @limiter.limit("10 per hour", methods=['POST'])
 def reset_password(token):
-    if current_user.is_authenticated:
-        return redirect(url_for('app_page'))
-
+    # Do NOT bounce logged-in users here: a reset link is often opened in a
+    # browser where the user is already signed in, and they still need to be
+    # able to set a new password.
     user = verify_reset_token(token)
     if user is None:
         # Bad, expired, or already-used link.
@@ -299,6 +299,7 @@ def reset_password(token):
     if form.validate_on_submit():
         user.set_password(form.password.data)
         db.session.commit()  # changing the hash also invalidates this reset link
+        logout_user()        # end the current session so they sign in fresh with the new password
         flash("Your password has been updated. Please log in.")
         return redirect(url_for('login'))
 
