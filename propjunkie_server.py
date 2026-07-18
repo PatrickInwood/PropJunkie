@@ -24,8 +24,9 @@ Run in production (Railway):
 import os
 import time
 import logging
+import threading
 from urllib.parse import urlparse
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -34,8 +35,11 @@ from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context
 from models import db, User
-from forms import SignupForm, LoginForm, LogoutForm, SPORT_CHOICES
-from emails import send_welcome_email
+from forms import (
+    SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
+)
+from emails import send_welcome_email, send_password_reset_email
+from tokens import generate_reset_token, verify_reset_token
 
 # Load .env file when running locally
 load_dotenv()
@@ -150,6 +154,19 @@ def terms_page():
 # AUTH — signup, login, logout
 # ─────────────────────────────────────────
 
+def _send_email_async(func, *args):
+    """Send a transactional email without blocking the response.
+
+    This keeps response timing the same whether or not the email exists, so an
+    attacker can't tell which addresses have accounts by measuring how long the
+    request takes. Sends synchronously under TESTING so tests stay deterministic.
+    """
+    if app.config.get("TESTING"):
+        func(*args)
+    else:
+        threading.Thread(target=func, args=args, daemon=True).start()
+
+
 def _safe_next():
     """Return the ?next= redirect target only if it's a safe, same-site path.
 
@@ -236,6 +253,50 @@ def logout():
     if form.validate_on_submit():
         logout_user()
     return redirect(url_for('landing'))
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit("5 per hour", methods=['POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('app_page'))
+
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        email = User.normalize_email(form.email.data)
+        user = User.query.filter_by(email=email).first()
+        if user is not None:
+            reset_url = url_for('reset_password', token=generate_reset_token(user), _external=True)
+            # Background send so response timing doesn't leak whether the email
+            # exists. The user's id/email are already loaded, so the thread never
+            # touches the request's database session.
+            _send_email_async(send_password_reset_email, user, reset_url)
+        # Always show the SAME confirmation, whether or not the email exists,
+        # so this form can't reveal which emails have accounts.
+        return render_template('forgot_password.html', form=form, sent=True)
+
+    return render_template('forgot_password.html', form=form, sent=False)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+@limiter.limit("10 per hour", methods=['POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('app_page'))
+
+    user = verify_reset_token(token)
+    if user is None:
+        # Bad, expired, or already-used link.
+        return render_template('reset_password.html', form=None, invalid=True)
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        db.session.commit()  # changing the hash also invalidates this reset link
+        flash("Your password has been updated. Please log in.")
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html', form=form, invalid=False)
 
 
 # ─────────────────────────────────────────

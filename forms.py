@@ -97,6 +97,26 @@ class LoginForm(FlaskForm):
     submit = SubmitField("Log in")
 
 
+class ForgotPasswordForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    submit = SubmitField("Send reset link")
+
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField(
+        "New password",
+        validators=[
+            DataRequired(),
+            Length(min=8, max=128, message="Password must be between 8 and 128 characters."),
+        ],
+    )
+    confirm_password = PasswordField(
+        "Confirm new password",
+        validators=[DataRequired(), EqualTo("password", message="Passwords must match.")],
+    )
+    submit = SubmitField("Set new password")
+
+
 class LogoutForm(FlaskForm):
     """No fields — it exists only to carry a CSRF token for the logout button,
     so logging out can't be triggered by another site."""

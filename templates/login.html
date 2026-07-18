@@ -41,6 +41,9 @@
         .btn:hover { background: var(--accent-hover); }
         .fine { color: var(--muted); font-size: 14px; margin-top: 20px; text-align: center; }
         .fine a { color: var(--accent); }
+        .notice { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.4);
+            color: #6ee7b7; padding: 10px 14px; border-radius: 9px; font-size: 14px; margin-bottom: 18px; }
+        .forgot { display: block; text-align: right; margin-top: 8px; font-size: 13px; color: var(--accent); }
     </style>
 </head>
 <body>
@@ -49,6 +52,10 @@
         <div class="card">
             <h1>Welcome back</h1>
             <p class="sub">Log in to your PropJunkie account.</p>
+
+            {% with messages = get_flashed_messages() %}
+              {% for m in messages %}<div class="notice">{{ m }}</div>{% endfor %}
+            {% endwith %}
 
             <form method="POST" action="/login" novalidate>
                 {{ form.hidden_tag() }}
@@ -61,6 +68,7 @@
                 <label>Password</label>
                 {{ form.password() }}
                 {% for e in form.password.errors %}<div class="err">{{ e }}</div>{% endfor %}
+                <a class="forgot" href="/forgot-password">Forgot your password?</a>
 
                 <div class="remember">
                     {{ form.remember() }}

@@ -107,3 +107,52 @@ You're receiving this because you created a PropJunkie account."""
         # Log and swallow — a failed welcome email must not fail the signup.
         logger.exception("Failed to send welcome email for user %s", user.id)
         return False
+
+
+def send_password_reset_email(user, reset_url: str) -> bool:
+    """Email a password-reset link. Never raises; returns False if skipped/failed."""
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.info("RESEND_API_KEY not set — skipping reset email for user %s", user.id)
+        return False
+
+    html = f"""\
+<div style="background:#f4f1ea;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #ececec;border-radius:14px;overflow:hidden;">
+    <div style="background:#0c0f0a;padding:22px 32px;">
+      <span style="font-size:22px;font-weight:800;color:#ffffff;">Prop<span style="color:#c9a84c;">Junkie</span></span>
+    </div>
+    <div style="padding:32px;color:#1a1a1a;line-height:1.6;">
+      <h1 style="margin:0 0 14px;font-size:22px;">Reset your password</h1>
+      <p style="margin:0 0 16px;">We received a request to reset the password for your PropJunkie account. Click the button below to choose a new one. This link expires in 1 hour.</p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="{reset_url}" style="display:inline-block;padding:13px 28px;background:#c9a84c;color:#0c0f0a;border-radius:9px;font-weight:700;text-decoration:none;">Reset password →</a>
+      </div>
+      <p style="margin:0;color:#666;font-size:13px;">If you didn't request this, you can safely ignore this email — your password won't change.</p>
+    </div>
+  </div>
+</div>"""
+
+    text = f"""\
+Reset your PropJunkie password
+
+We received a request to reset your password. Open this link to choose a new one (expires in 1 hour):
+
+{reset_url}
+
+If you didn't request this, ignore this email — your password won't change."""
+
+    try:
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": _from_address(),
+            "to": [user.email],
+            "subject": "Reset your PropJunkie password",
+            "html": html,
+            "text": text,
+        })
+        logger.info("Password reset email sent for user %s", user.id)
+        return True
+    except Exception:
+        logger.exception("Failed to send password reset email for user %s", user.id)
+        return False
