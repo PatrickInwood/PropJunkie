@@ -33,7 +33,7 @@ from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context
 from models import db, User
-from forms import SignupForm, SPORT_CHOICES
+from forms import SignupForm, LogoutForm, SPORT_CHOICES
 from emails import send_welcome_email
 
 # Load .env file when running locally
@@ -182,12 +182,21 @@ def signup():
     return render_template('signup.html', form=form, min_age=min_age, sport_choices=SPORT_CHOICES)
 
 
+@app.route('/account', methods=['GET'])
+@login_required
+def account():
+    # Minimal account page — for now its main job is a reliable log-out.
+    return render_template('account.html', form=LogoutForm())
+
+
 @app.route('/logout', methods=['POST'])
 @login_required
 def logout():
-    # POST-only (with CSRF token) so another site can't force-log-out users
-    # via a plain link or an <img> tag pointed at /logout.
-    logout_user()
+    # POST-only, and we validate the form's CSRF token, so another site can't
+    # force-log-out users via a link, an <img> tag, or a cross-site POST.
+    form = LogoutForm()
+    if form.validate_on_submit():
+        logout_user()
     return redirect(url_for('landing'))
 
 

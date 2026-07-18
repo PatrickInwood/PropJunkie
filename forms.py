@@ -87,3 +87,9 @@ class SignupForm(FlaskForm):
         # Reuse the model's age logic so there's one source of truth.
         if not User(date_of_birth=field.data).is_of_age(_min_age()):
             raise ValidationError(f"You must be at least {_min_age()} to sign up.")
+
+
+class LogoutForm(FlaskForm):
+    """No fields — it exists only to carry a CSRF token for the logout button,
+    so logging out can't be triggered by another site."""
+    pass

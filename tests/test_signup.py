@@ -146,3 +146,15 @@ def test_logout_ends_the_session(client):
 
     # Logged out now: /signup renders the form again instead of redirecting.
     assert client.get("/signup").status_code == 200
+
+
+def test_account_page_requires_login(client):
+    # Not logged in → Flask-Login blocks access.
+    assert client.get("/account").status_code == 401
+
+
+def test_account_page_shows_email_when_logged_in(client):
+    _post(client)  # sign up → logged in
+    r = client.get("/account")
+    assert r.status_code == 200
+    assert b"new.user@example.com" in r.data
