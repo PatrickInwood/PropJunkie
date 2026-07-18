@@ -519,8 +519,17 @@
             <a href="/lines">Live Lines</a>
             <a href="/app#parlay">Parlay Builder</a>
             <a href="#pricing">Pricing</a>
+            {% if current_user.is_authenticated %}
+            <a href="/account">Account</a>
+            {% else %}
+            <a href="/login">Log In</a>
+            {% endif %}
         </div>
+        {% if current_user.is_authenticated %}
         <a href="/app" class="btn-nav">Launch App →</a>
+        {% else %}
+        <a href="/signup" class="btn-nav">Sign Up →</a>
+        {% endif %}
         <button class="hamburger" id="hamburger" onclick="toggleMobileNav()" aria-label="Menu">
             <span></span><span></span><span></span>
         </button>
@@ -531,7 +540,13 @@
     <a href="/lines" onclick="closeMobileNav()">Live Lines</a>
     <a href="/app#parlay" onclick="closeMobileNav()">Parlay Builder</a>
     <a href="#pricing" onclick="closeMobileNav()">Pricing</a>
+    {% if current_user.is_authenticated %}
+    <a href="/account" onclick="closeMobileNav()">Account</a>
     <a href="/app" class="mobile-launch">Launch App →</a>
+    {% else %}
+    <a href="/login" onclick="closeMobileNav()">Log In</a>
+    <a href="/signup" class="mobile-launch">Sign Up →</a>
+    {% endif %}
 </div>
 <script>
     function toggleMobileNav() {

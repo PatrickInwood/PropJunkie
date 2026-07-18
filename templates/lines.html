@@ -375,6 +375,12 @@
     <div class="nav-links">
         <a href="/lines" class="nav-link active">Lines</a>
         <a href="/app" class="nav-link">Prop Analyzer</a>
+        {% if current_user.is_authenticated %}
+        <a href="/account" class="nav-link">Account</a>
+        {% else %}
+        <a href="/login" class="nav-link">Log In</a>
+        <a href="/signup" class="nav-link">Sign Up</a>
+        {% endif %}
         <div class="theme-toggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
             <div class="t-opt active" id="tDark">🌙 Dark</div>
             <div class="t-opt" id="tLight">☀️ Light</div>
