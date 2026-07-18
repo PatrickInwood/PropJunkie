@@ -38,8 +38,10 @@ from models import db, User
 from forms import (
     SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
 )
-from emails import send_welcome_email, send_password_reset_email
-from tokens import generate_reset_token, verify_reset_token
+from emails import send_welcome_email, send_verification_email, send_password_reset_email
+from tokens import (
+    generate_reset_token, verify_reset_token, generate_email_token, verify_email_token,
+)
 
 # Load .env file when running locally
 load_dotenv()
@@ -228,8 +230,12 @@ def signup():
         else:
             # "Let them in right away" — start a logged-in session immediately.
             login_user(user)
-            # Welcome email is fire-and-forget: it never blocks or breaks signup.
-            send_welcome_email(user)
+            # Fire-and-forget emails (sent in the background so signup stays
+            # snappy and never breaks if email fails): a welcome, plus a
+            # "confirm your email" link.
+            verify_url = url_for('verify_email', token=generate_email_token(user), _external=True)
+            _send_email_async(send_welcome_email, user)
+            _send_email_async(send_verification_email, user, verify_url)
             return redirect(url_for('app_page'))
 
     # GET, or a POST that failed validation (errors render on the form).
@@ -297,6 +303,35 @@ def reset_password(token):
         return redirect(url_for('login'))
 
     return render_template('reset_password.html', form=form, invalid=False)
+
+
+@app.route('/verify-email/<token>', methods=['GET'])
+def verify_email(token):
+    user = verify_email_token(token)
+    if user is None:
+        flash("That verification link is invalid or has expired.")
+    else:
+        if not user.email_verified:
+            user.email_verified = True
+            db.session.commit()
+        flash("Your email address has been verified. 🎉")
+    return redirect(url_for('account') if current_user.is_authenticated else url_for('login'))
+
+
+@app.route('/resend-verification', methods=['POST'])
+@limiter.limit("5 per hour")
+@login_required
+def resend_verification():
+    # Reuse the empty CSRF-only form to validate the request's token.
+    form = LogoutForm()
+    if form.validate_on_submit():
+        if current_user.email_verified:
+            flash("Your email is already verified.")
+        else:
+            verify_url = url_for('verify_email', token=generate_email_token(current_user), _external=True)
+            _send_email_async(send_verification_email, current_user, verify_url)
+            flash("Verification email sent — check your inbox.")
+    return redirect(url_for('account'))
 
 
 # ─────────────────────────────────────────

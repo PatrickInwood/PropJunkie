@@ -31,6 +31,15 @@
         }
         .btn:hover { background: var(--accent-hover); }
         .link { display: inline-block; margin-top: 18px; color: var(--accent); font-size: 14px; }
+        .notice { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.4);
+            color: #6ee7b7; padding: 10px 14px; border-radius: 9px; font-size: 14px; margin: 16px 0; }
+        .verified { color: #6ee7b7; font-weight: 600; font-size: 15px; margin-top: 2px; }
+        .unverified { color: #e0b341; font-weight: 600; font-size: 15px; margin-top: 2px; }
+        .btn-secondary {
+            margin-top: 10px; padding: 9px 16px; background: transparent; color: var(--accent);
+            border: 1px solid var(--accent); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        .btn-secondary:hover { background: rgba(201,168,76,0.1); }
     </style>
 </head>
 <body>
@@ -38,10 +47,26 @@
     <div class="wrap">
         <div class="card">
             <h1>Your account</h1>
+
+            {% with messages = get_flashed_messages() %}
+              {% for m in messages %}<div class="notice">{{ m }}</div>{% endfor %}
+            {% endwith %}
+
             <div class="label">Signed in as</div>
             <div class="email">{{ current_user.email }}</div>
 
-            <form method="POST" action="/logout">
+            <div class="label">Email status</div>
+            {% if current_user.email_verified %}
+                <div class="verified">✓ Verified</div>
+            {% else %}
+                <div class="unverified">Not verified yet</div>
+                <form method="POST" action="/resend-verification">
+                    {{ form.hidden_tag() }}
+                    <button type="submit" class="btn-secondary">Resend verification email</button>
+                </form>
+            {% endif %}
+
+            <form method="POST" action="/logout" style="margin-top:24px;">
                 {{ form.hidden_tag() }}
                 <button type="submit" class="btn">Log out</button>
             </form>

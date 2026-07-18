@@ -109,6 +109,55 @@ You're receiving this because you created a PropJunkie account."""
         return False
 
 
+def send_verification_email(user, verify_url: str) -> bool:
+    """Email an address-verification link. Never raises; returns False if skipped/failed."""
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.info("RESEND_API_KEY not set — skipping verification email for user %s", user.id)
+        return False
+
+    html = f"""\
+<div style="background:#f4f1ea;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #ececec;border-radius:14px;overflow:hidden;">
+    <div style="background:#0c0f0a;padding:22px 32px;">
+      <span style="font-size:22px;font-weight:800;color:#ffffff;">Prop<span style="color:#c9a84c;">Junkie</span></span>
+    </div>
+    <div style="padding:32px;color:#1a1a1a;line-height:1.6;">
+      <h1 style="margin:0 0 14px;font-size:22px;">Confirm your email</h1>
+      <p style="margin:0 0 16px;">Please confirm this is your email address so we can keep your PropJunkie account secure. This link expires in 24 hours.</p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="{verify_url}" style="display:inline-block;padding:13px 28px;background:#c9a84c;color:#0c0f0a;border-radius:9px;font-weight:700;text-decoration:none;">Verify my email →</a>
+      </div>
+      <p style="margin:0;color:#666;font-size:13px;">If you didn't create a PropJunkie account, you can ignore this email.</p>
+    </div>
+  </div>
+</div>"""
+
+    text = f"""\
+Confirm your PropJunkie email
+
+Please confirm your email address (link expires in 24 hours):
+
+{verify_url}
+
+If you didn't create a PropJunkie account, ignore this email."""
+
+    try:
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": _from_address(),
+            "to": [user.email],
+            "subject": "Confirm your PropJunkie email",
+            "html": html,
+            "text": text,
+        })
+        logger.info("Verification email sent for user %s", user.id)
+        return True
+    except Exception:
+        logger.exception("Failed to send verification email for user %s", user.id)
+        return False
+
+
 def send_password_reset_email(user, reset_url: str) -> bool:
     """Email a password-reset link. Never raises; returns False if skipped/failed."""
     api_key = os.getenv("RESEND_API_KEY")
