@@ -24,6 +24,7 @@ Run in production (Railway):
 import os
 import time
 import logging
+from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -33,7 +34,7 @@ from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context
 from models import db, User
-from forms import SignupForm, LogoutForm, SPORT_CHOICES
+from forms import SignupForm, LoginForm, LogoutForm, SPORT_CHOICES
 from emails import send_welcome_email
 
 # Load .env file when running locally
@@ -78,6 +79,9 @@ db.init_app(app)
 # ── Login sessions (Flask-Login) ──
 login_manager = LoginManager()
 login_manager.init_app(app)
+# Where to send users who hit a login-required page while logged out.
+login_manager.login_view = "login"
+login_manager.login_message_category = "info"
 
 
 @login_manager.user_loader
@@ -143,8 +147,42 @@ def terms_page():
 
 
 # ─────────────────────────────────────────
-# AUTH — signup, logout
+# AUTH — signup, login, logout
 # ─────────────────────────────────────────
+
+def _safe_next():
+    """Return the ?next= redirect target only if it's a safe, same-site path.
+
+    This prevents an 'open redirect' — a login link that quietly bounces the
+    user off to an attacker's site after they sign in. We only allow paths
+    that start with a single '/' and carry no other domain.
+    """
+    target = request.values.get('next')
+    if target and target.startswith('/') and not target.startswith('//') \
+            and not urlparse(target).netloc:
+        return target
+    return None
+
+
+@app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute; 50 per hour", methods=['POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('app_page'))
+
+    form = LoginForm()
+    if form.validate_on_submit():
+        email = User.normalize_email(form.email.data)
+        user = User.query.filter_by(email=email).first()
+        if user is not None and user.check_password(form.password.data):
+            login_user(user, remember=form.remember.data)
+            return redirect(_safe_next() or url_for('app_page'))
+        # One generic message for both "no such email" and "wrong password",
+        # so the form can't be used to discover which emails have accounts.
+        form.password.errors.append("Incorrect email or password.")
+
+    return render_template('login.html', form=form, next=_safe_next())
+
 
 @app.route('/signup', methods=['GET', 'POST'])
 @limiter.limit("10 per hour", methods=['POST'])

@@ -26,30 +26,6 @@ VALID = {
 }
 
 
-@pytest.fixture
-def client(monkeypatch):
-    srv.app.config["TESTING"] = True
-    srv.app.config["WTF_CSRF_ENABLED"] = False   # CSRF token isn't sent by the test client
-    srv.app.config["RATELIMIT_ENABLED"] = False  # don't rate-limit rapid test requests
-
-    # Record welcome-email attempts instead of sending real mail.
-    sent = []
-    monkeypatch.setattr(srv, "send_welcome_email", lambda user: sent.append(user.email))
-
-    with srv.app.app_context():
-        db.create_all()
-        db.session.query(User).delete()
-        db.session.commit()
-
-    test_client = srv.app.test_client()
-    test_client.sent = sent
-    yield test_client
-
-    with srv.app.app_context():
-        db.session.query(User).delete()
-        db.session.commit()
-
-
 def _post(client, **overrides):
     data = dict(VALID)
     data.update(overrides)
@@ -149,8 +125,10 @@ def test_logout_ends_the_session(client):
 
 
 def test_account_page_requires_login(client):
-    # Not logged in → Flask-Login blocks access.
-    assert client.get("/account").status_code == 401
+    # Not logged in → Flask-Login redirects to the login page.
+    r = client.get("/account")
+    assert r.status_code == 302
+    assert "/login" in r.headers["Location"]
 
 
 def test_account_page_shows_email_when_logged_in(client):

@@ -21,6 +21,7 @@ from wtforms import (
     DateField,
     SelectField,
     SelectMultipleField,
+    BooleanField,
     SubmitField,
 )
 from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError
@@ -87,6 +88,13 @@ class SignupForm(FlaskForm):
         # Reuse the model's age logic so there's one source of truth.
         if not User(date_of_birth=field.data).is_of_age(_min_age()):
             raise ValidationError(f"You must be at least {_min_age()} to sign up.")
+
+
+class LoginForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    password = PasswordField("Password", validators=[DataRequired()])
+    remember = BooleanField("Remember me")
+    submit = SubmitField("Log in")
 
 
 class LogoutForm(FlaskForm):

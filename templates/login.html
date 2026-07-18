@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in — PropJunkie</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0c0f0a; --surface: #141a12; --border: #1e2a1a;
+            --accent: #c9a84c; --accent-hover: #a8893a; --text: #e8ecf4; --muted: #4a6a44; --red: #ef4444;
+        }
+        body {
+            background: var(--bg); color: var(--text); min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6;
+        }
+        a { text-decoration: none; color: inherit; }
+        nav { border-bottom: 1px solid var(--border); padding: 14px 24px; background: var(--surface); }
+        .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+        .logo span { color: var(--accent); }
+        .wrap { max-width: 420px; margin: 56px auto; padding: 0 20px; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; }
+        h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+        .sub { color: var(--muted); font-size: 14px; margin: 6px 0 24px; }
+        label { display: block; font-size: 13px; color: var(--text); margin: 16px 0 6px; font-weight: 600; }
+        input[type=email], input[type=password] {
+            width: 100%; padding: 11px 13px; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 9px; color: var(--text);
+            font-size: 15px; font-family: inherit;
+        }
+        input:focus { outline: none; border-color: var(--accent); }
+        .remember { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 14px; color: var(--muted); }
+        .remember input { width: auto; }
+        .remember label { margin: 0; font-weight: 400; color: var(--muted); }
+        .err { color: var(--red); font-size: 12px; margin-top: 5px; }
+        .btn {
+            width: 100%; margin-top: 22px; padding: 13px; background: var(--accent);
+            color: var(--bg); border: none; border-radius: 9px; font-size: 15px; font-weight: 700; cursor: pointer;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .fine { color: var(--muted); font-size: 14px; margin-top: 20px; text-align: center; }
+        .fine a { color: var(--accent); }
+    </style>
+</head>
+<body>
+    <nav><a href="/" class="logo"><span>Prop</span>Junkie</a></nav>
+    <div class="wrap">
+        <div class="card">
+            <h1>Welcome back</h1>
+            <p class="sub">Log in to your PropJunkie account.</p>
+
+            <form method="POST" action="/login" novalidate>
+                {{ form.hidden_tag() }}
+                <input type="hidden" name="next" value="{{ next or '' }}">
+
+                <label>Email</label>
+                {{ form.email(type="email", placeholder="you@example.com") }}
+                {% for e in form.email.errors %}<div class="err">{{ e }}</div>{% endfor %}
+
+                <label>Password</label>
+                {{ form.password() }}
+                {% for e in form.password.errors %}<div class="err">{{ e }}</div>{% endfor %}
+
+                <div class="remember">
+                    {{ form.remember() }}
+                    <label>Remember me</label>
+                </div>
+
+                {{ form.submit(class="btn") }}
+            </form>
+
+            <p class="fine">Don't have an account? <a href="/signup">Sign up</a></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -13,3 +13,37 @@ os.environ.setdefault(
     "DATABASE_URL",
     "sqlite:///" + os.path.join(tempfile.gettempdir(), "propjunkie_test.db"),
 )
+
+import pytest
+
+
+@pytest.fixture
+def client(monkeypatch):
+    """A Flask test client backed by an isolated, freshly-reset database.
+
+    Shared by the signup and login test modules. Rate limiting and CSRF are
+    disabled (the test client can't carry a CSRF token), and the welcome email
+    is stubbed out so no real mail is sent.
+    """
+    import propjunkie_server as srv
+    from models import db, User
+
+    srv.app.config["TESTING"] = True
+    srv.app.config["WTF_CSRF_ENABLED"] = False
+    srv.app.config["RATELIMIT_ENABLED"] = False
+
+    sent = []
+    monkeypatch.setattr(srv, "send_welcome_email", lambda user: sent.append(user.email))
+
+    with srv.app.app_context():
+        db.create_all()
+        db.session.query(User).delete()
+        db.session.commit()
+
+    test_client = srv.app.test_client()
+    test_client.sent = sent
+    yield test_client
+
+    with srv.app.app_context():
+        db.session.query(User).delete()
+        db.session.commit()
