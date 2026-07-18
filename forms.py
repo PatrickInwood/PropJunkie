@@ -49,6 +49,27 @@ def _min_age() -> int:
         return 21
 
 
+# A small blocklist of the most common weak passwords. Following current
+# guidance (NIST), we check against common passwords rather than forcing
+# fiddly composition rules (a symbol here, a capital there) that mostly annoy
+# users without adding much real security.
+COMMON_PASSWORDS = {
+    "password", "password1", "password123", "12345678", "123456789", "1234567890",
+    "qwerty", "qwerty123", "abc12345", "11111111", "iloveyou", "letmein",
+    "welcome", "admin123", "football", "baseball", "sunshine", "princess",
+    "propjunkie", "propjunkie1",
+}
+
+
+def strong_password(form, field):
+    """Reject obviously weak passwords (all-numeric or very common)."""
+    pw = field.data or ""
+    if pw.isdigit():
+        raise ValidationError("Choose a password that isn't all numbers.")
+    if pw.lower() in COMMON_PASSWORDS:
+        raise ValidationError("That password is too common — please choose another.")
+
+
 class SignupForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField(
@@ -58,6 +79,7 @@ class SignupForm(FlaskForm):
             # Cap the length too: hashing is deliberately slow, so a giant
             # password would waste server CPU.
             Length(min=8, max=128, message="Password must be between 8 and 128 characters."),
+            strong_password,
         ],
     )
     confirm_password = PasswordField(
@@ -108,6 +130,7 @@ class ResetPasswordForm(FlaskForm):
         validators=[
             DataRequired(),
             Length(min=8, max=128, message="Password must be between 8 and 128 characters."),
+            strong_password,
         ],
     )
     confirm_password = PasswordField(

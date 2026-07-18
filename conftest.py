@@ -30,7 +30,10 @@ def client(monkeypatch):
 
     srv.app.config["TESTING"] = True
     srv.app.config["WTF_CSRF_ENABLED"] = False
-    srv.app.config["RATELIMIT_ENABLED"] = False
+    # flask-limiter caches its enabled flag at startup, so setting the config
+    # here wouldn't take effect — disable the limiter object directly. Otherwise
+    # POSTs accumulate against the real rate limits across the whole test run.
+    srv.limiter.enabled = False
 
     sent = []
     monkeypatch.setattr(srv, "send_welcome_email", lambda user: sent.append(user.email))

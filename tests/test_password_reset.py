@@ -122,6 +122,15 @@ class TestResetPassword:
         assert r.status_code == 200
         assert b"match" in r.data
 
+    def test_weak_new_password_rejected(self, client):
+        _make_user()
+        r = client.post(
+            f"/reset-password/{_token_for()}",
+            data={"password": "password", "confirm_password": "password"},
+        )
+        assert r.status_code == 200
+        assert b"too common" in r.data
+
     def test_post_with_invalid_token_cannot_reset(self, client):
         # POST is the path that actually changes a password — a bad/expired
         # token there must be refused, and the old password must still work.

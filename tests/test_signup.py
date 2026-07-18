@@ -98,6 +98,22 @@ def test_short_password_rejected(client):
         assert db.session.query(User).count() == 0
 
 
+def test_all_numeric_password_rejected(client):
+    r = _post(client, password="98765432", confirm_password="98765432")
+    assert r.status_code == 200
+    assert b"all numbers" in r.data
+    with srv.app.app_context():
+        assert db.session.query(User).count() == 0
+
+
+def test_common_password_rejected(client):
+    r = _post(client, password="password", confirm_password="password")
+    assert r.status_code == 200
+    assert b"too common" in r.data
+    with srv.app.app_context():
+        assert db.session.query(User).count() == 0
+
+
 def test_blank_date_of_birth_rejected(client):
     r = _post(client, date_of_birth="")
     assert r.status_code == 200
