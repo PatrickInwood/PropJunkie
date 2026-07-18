@@ -35,6 +35,23 @@ def test_sends_with_correct_fields(monkeypatch):
     assert captured["to"] == ["al@example.com"]
     assert captured["from"] == "noreply@propjunkie.app"
     assert "Welcome" in captured["subject"]
+    assert "propjunkie.app/app" in captured["html"]        # CTA link present
+    assert "support@propjunkie.app" in captured["html"]    # default support address
+    assert "PropJunkie" in captured["text"]                # plain-text version included
+
+
+def test_support_email_is_configurable(monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("SUPPORT_EMAIL", "help@propjunkie.app")
+
+    captured = {}
+    monkeypatch.setattr(
+        emails.resend.Emails, "send",
+        staticmethod(lambda payload: captured.update(payload) or {"id": "x"}),
+    )
+
+    emails.send_welcome_email(DummyUser())
+    assert "help@propjunkie.app" in captured["html"]
 
 
 def test_send_failure_never_raises(monkeypatch):

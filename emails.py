@@ -24,6 +24,12 @@ def _from_address() -> str:
     return os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 
 
+def _support_address() -> str:
+    # The customer-support address shown in emails. Configurable via env var
+    # so it can be changed without a code change / redeploy.
+    return os.getenv("SUPPORT_EMAIL", "support@propjunkie.app")
+
+
 def send_welcome_email(user) -> bool:
     """Send a welcome email to a newly registered user.
 
@@ -35,30 +41,65 @@ def send_welcome_email(user) -> bool:
         logger.info("RESEND_API_KEY not set — skipping welcome email for user %s", user.id)
         return False
 
-    greeting = f"Hi {user.name}," if user.name else "Hi there,"
-    html = f"""
-    <div style="font-family: -apple-system, Segoe UI, sans-serif; color: #1a1a1a;">
-      <h2>Welcome to PropJunkie 🏀</h2>
-      <p>{greeting}</p>
-      <p>Your account is ready. You can start analyzing player props right now —
-      enter your projection, pick a game, and get instant probability analysis
-      backed by live sportsbook lines and real player stats.</p>
-      <p><a href="https://propjunkie.app/app"
-            style="display:inline-block;padding:10px 20px;background:#c9a84c;
-                   color:#0c0f0a;border-radius:8px;font-weight:600;">
-        Open PropJunkie →</a></p>
-      <p style="color:#666;font-size:13px;margin-top:24px;">
-        You're receiving this because you created a PropJunkie account.</p>
+    support = _support_address()
+    name = (user.name or "").strip()
+    hello = f"Welcome to PropJunkie, {name}" if name else "Welcome to PropJunkie"
+
+    html = f"""\
+<div style="background:#f4f1ea;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #ececec;border-radius:14px;overflow:hidden;">
+    <div style="background:#0c0f0a;padding:22px 32px;">
+      <span style="font-size:22px;font-weight:800;color:#ffffff;">Prop<span style="color:#c9a84c;">Junkie</span></span>
     </div>
-    """
+    <div style="padding:32px;color:#1a1a1a;line-height:1.6;">
+      <h1 style="margin:0 0 14px;font-size:22px;">{hello} 🏀</h1>
+      <p style="margin:0 0 16px;">Thanks for joining PropJunkie — we're glad to have you. You've got a genuine edge-finding engine in your corner now.</p>
+      <p style="margin:0 0 8px;font-weight:600;">Here's what it does:</p>
+      <ul style="margin:0 0 20px;padding-left:20px;color:#333;">
+        <li style="margin-bottom:6px;">Turns your projection into a real hit probability — across NBA, NFL, MLB &amp; NHL.</li>
+        <li style="margin-bottom:6px;">Compares your number to live sportsbook lines with the vig stripped out, so you see the <em>true</em> edge.</li>
+        <li style="margin-bottom:6px;">Delivers instant AI breakdowns backed by real ESPN player stats.</li>
+        <li style="margin-bottom:6px;">Stacks your picks into parlays with fair, no-vig odds.</li>
+      </ul>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="https://propjunkie.app/app" style="display:inline-block;padding:13px 28px;background:#c9a84c;color:#0c0f0a;border-radius:9px;font-weight:700;text-decoration:none;">Open PropJunkie →</a>
+      </div>
+      <p style="margin:0 0 4px;color:#333;">For questions, concerns, or issues with PropJunkie, please contact <a href="mailto:{support}" style="color:#a8893a;">{support}</a> for assistance. At PropJunkie, we listen to our customers' feedback and are constantly evolving.</p>
+      <p style="margin:24px 0 0;font-size:12px;color:#888;border-top:1px solid #eee;padding-top:16px;">
+        Bet with an edge — and always bet responsibly. Must be 21+. If gambling stops being fun, call 1-800-GAMBLER.<br>
+        You're receiving this because you created a PropJunkie account.
+      </p>
+    </div>
+  </div>
+</div>"""
+
+    text = f"""\
+{hello}!
+
+Thanks for joining PropJunkie — we're glad to have you.
+
+Here's what it does:
+- Turns your projection into a real hit probability across NBA, NFL, MLB & NHL
+- Compares your number to live sportsbook lines with the vig stripped out, so you see the true edge
+- Delivers instant AI breakdowns backed by real ESPN player stats
+- Stacks your picks into parlays with fair, no-vig odds
+
+Open PropJunkie: https://propjunkie.app/app
+
+For questions, concerns, or issues with PropJunkie, please contact {support} for assistance. \
+At PropJunkie, we listen to our customers' feedback and are constantly evolving.
+
+Bet with an edge — and always bet responsibly. Must be 21+. If gambling stops being fun, call 1-800-GAMBLER.
+You're receiving this because you created a PropJunkie account."""
 
     try:
         resend.api_key = api_key
         resend.Emails.send({
             "from": _from_address(),
             "to": [user.email],
-            "subject": "Welcome to PropJunkie",
+            "subject": "Welcome to PropJunkie — you're in 🏀",
             "html": html,
+            "text": text,
         })
         logger.info("Welcome email sent for user %s", user.id)
         return True
