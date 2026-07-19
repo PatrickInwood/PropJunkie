@@ -71,30 +71,45 @@ class _FakeResp:
         return self._payload
 
 
+# ESPN's game log lists games newest-first; the fetcher reverses to oldest-first.
 def _fake_espn_get(url, **kwargs):
-    if "/athletes/" in url and url.endswith("/gamelog"):
+    if "/search/v2" in url:
+        return _FakeResp(200, {"results": [
+            {"type": "player", "contents": [
+                {"displayName": "Test Player",
+                 "link": {"web": "https://www.espn.com/nba/player/_/id/123/test-player"}},
+            ]},
+        ]})
+    if url.endswith("/gamelog"):
         return _FakeResp(200, {
-            "splits": {
-                "categories": [{"name": "scoring", "names": ["points"]}],
-                "entries": [
-                    {"stats": ["20"]}, {"stats": ["22"]}, {"stats": ["30"]},
-                    {"stats": ["18"]}, {"stats": ["26"]},
-                ],
-            }
+            "names": ["minutes", "threePointFieldGoalsMade-threePointFieldGoalsAttempted", "points"],
+            "seasonTypes": [
+                {"categories": [{"events": [       # newest games first
+                    {"stats": ["30", "4-9", "26"]},
+                    {"stats": ["28", "1-5", "18"]},
+                ]}]},
+                {"categories": [{"events": [
+                    {"stats": ["35", "3-7", "30"]},
+                ]}]},
+            ],
         })
-    if url.endswith("/athletes"):
-        return _FakeResp(200, {"items": [{"id": 123, "displayName": "Test Player"}]})
     return _FakeResp(404, {})
 
 
 class TestFetchRecentStatValues:
-    def test_parses_gamelog_values(self, monkeypatch):
+    def test_parses_gamelog_values_oldest_first(self, monkeypatch):
         monkeypatch.setattr(pe.requests, "get", _fake_espn_get)
         values = pe.fetch_recent_stat_values("Test Player", "player_points", "basketball_nba")
-        assert values == [20.0, 22.0, 30.0, 18.0, 26.0]
+        # Reversed across blocks: oldest (regular-season 30) → newest (26).
+        assert values == [30.0, 18.0, 26.0]
+
+    def test_compound_stat_takes_made_side(self, monkeypatch):
+        monkeypatch.setattr(pe.requests, "get", _fake_espn_get)
+        values = pe.fetch_recent_stat_values("Test Player", "player_threes", "basketball_nba")
+        assert values == [3.0, 1.0, 4.0]   # "3-7","1-5","4-9" → made side, oldest-first
 
     def test_unknown_athlete_returns_empty(self, monkeypatch):
-        monkeypatch.setattr(pe.requests, "get", lambda url, **k: _FakeResp(200, {"items": []}))
+        monkeypatch.setattr(pe.requests, "get", lambda url, **k: _FakeResp(200, {"results": []}))
         assert pe.fetch_recent_stat_values("Nobody", "player_points", "basketball_nba") == []
 
     def test_network_error_returns_empty(self, monkeypatch):

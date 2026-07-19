@@ -311,114 +311,31 @@ MARKET_ESPN_MAP = {
 
 
 def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str) -> str:
-    """
-    Fetch player's recent stats for the AI analysis prompt (free, no key needed).
-    Returns '' on any error — never blocks the main analysis.
+    """Build the AI prompt's recent-game context line from free game logs.
 
-    MLB is routed through the official MLB Stats API, which is reliable; ESPN's
-    unofficial athlete-search endpoint (used for the other sports) is not.
+    Uses the same data layer as the projection engine (``fetch_recent_stat_values``):
+    MLB via the official MLB Stats API, NBA/NFL/NHL via ESPN game logs. This keeps
+    the analysis and the projection citing the *same* real recent-game numbers.
+    Returns '' on any error so it never blocks the main analysis.
     """
-    if sport_key == "baseball_mlb":
-        return _mlb_player_context(player_name, market_key)
     try:
-        sport_info = ESPN_SPORT_MAP.get(sport_key)
-        if not sport_info:
+        values = fetch_recent_stat_values(player_name, market_key, sport_key, limit=10)
+        if len(values) < 2:
             return ''
-        sport, league = sport_info
-        stat_info = MARKET_ESPN_MAP.get(market_key)
-        if not stat_info:
-            return ''
-        cat_frag, stat_frags, human_label = stat_info
-        # stat_frags can be a list or a single string for backward compat
-        if isinstance(stat_frags, str):
-            stat_frags = [stat_frags]
-        r = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/athletes",
-            params={'search': player_name, 'limit': 5},
-            headers=ESPN_HDR, timeout=5
+        recent = values[-5:]
+        label  = MARKET_ESPN_MAP.get(market_key, (None, None, market_key))[2]
+        source = "MLB Stats API" if sport_key == "baseball_mlb" else "ESPN"
+
+        def _fmt(v):
+            return str(int(v)) if float(v).is_integer() else f"{v:.1f}"
+
+        shown = ', '.join(_fmt(v) for v in recent)
+        avg   = sum(recent) / len(recent)
+        return (
+            f"📊 REAL PLAYER DATA ({source} — cite these, not generic league avgs): "
+            f"{player_name} last {len(recent)} games — {label}: "
+            f"{shown}  |  recent avg: {avg:.1f}"
         )
-        if r.status_code != 200:
-            return ''
-        items = r.json().get('items', [])
-        if not items:
-            return ''
-        athlete_id   = str(items[0]['id'])
-        display_name = items[0].get('displayName', player_name)
-        try:
-            r = requests.get(
-                f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}/gamelog",
-                headers=ESPN_HDR, timeout=6
-            )
-            if r.status_code == 200:
-                data       = r.json()
-                categories = data.get('splits', {}).get('categories', [])
-                entries    = data.get('splits', {}).get('entries', [])
-                stat_idx, offset = None, 0
-                for cat in categories:
-                    # Use names/labels for index alignment; fall back through ESPN's varying fields
-                    idx_names = (cat.get('names') or cat.get('labels') or
-                                 cat.get('displayNames') or cat.get('abbreviations') or [])
-                    if cat_frag.lower() in cat.get('name', '').lower():
-                        for i, n in enumerate(idx_names):
-                            n_padded = ' ' + n.lower() + ' '
-                            if any(f.lower() in n_padded or
-                                   f.lower().strip() == n.lower().strip()
-                                   for f in stat_frags):
-                                stat_idx = offset + i
-                                break
-                    if stat_idx is not None:
-                        break
-                    offset += len(idx_names)
-                if stat_idx is not None and entries:
-                    vals = []
-                    for entry in entries[-5:]:
-                        raw = entry.get('stats', [])
-                        if stat_idx < len(raw):
-                            v = str(raw[stat_idx])
-                            try:
-                                float(v.replace(',', ''))
-                                vals.append(v)
-                            except ValueError:
-                                pass
-                    if len(vals) >= 2:
-                        nums = [float(v.replace(',', '')) for v in vals]
-                        avg  = sum(nums) / len(nums)
-                        return (
-                            f"📊 REAL PLAYER DATA (ESPN — cite these, not generic league avgs): "
-                            f"{display_name} last {len(vals)} games — {human_label}: "
-                            f"{', '.join(vals)}  |  recent avg: {avg:.1f}"
-                        )
-        except Exception:
-            pass
-        r = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}/stats",
-            headers=ESPN_HDR, timeout=5
-        )
-        if r.status_code != 200:
-            return ''
-        cats = r.json().get('splits', {}).get('categories', [])
-        for cat in cats:
-            if cat_frag.lower() not in cat.get('name', '').lower():
-                continue
-            stats = cat.get('stats', [])
-            def matches_stat(name_str):
-                n_padded = ' ' + name_str.lower() + ' '
-                return any(f.lower() in n_padded or f.lower().strip() == name_str.lower().strip()
-                           for f in stat_frags)
-            for stat in stats:
-                n = stat.get('name', '')
-                if 'avg' in n.lower() and matches_stat(n):
-                    val = stat.get('displayValue') or str(stat.get('value', ''))
-                    if val:
-                        return (f"📊 REAL PLAYER DATA (ESPN — season avg): "
-                                f"{display_name} — {human_label}: {val}/game")
-            for stat in stats:
-                if matches_stat(stat.get('name', '')):
-                    val = stat.get('displayValue') or str(stat.get('value', ''))
-                    if val:
-                        return (f"📊 REAL PLAYER DATA (ESPN — current season): "
-                                f"{display_name} — {human_label}: {val}")
-        return ''
     except Exception:
         return ''
 
@@ -667,109 +584,100 @@ def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
         return []
 
 
-def _mlb_player_context(player_name: str, market_key: str) -> str:
-    """Build the AI prompt's recent-game context for MLB from the official Stats API.
+# ESPN game-log data layer (NBA / NFL / NHL). MLB uses its own official API above.
+# The old "/athletes?search=" endpoint returns 404; these two work:
+ESPN_SEARCH_URL  = "https://site.web.api.espn.com/apis/search/v2"
+ESPN_GAMELOG_URL = "https://site.web.api.espn.com/apis/common/v3/sports/{sport}/{league}/athletes/{aid}/gamelog"
 
-    Reuses the same free data source as the projection engine, so the analysis
-    cites the player's real recent games instead of generic league averages.
-    Returns '' on any error so it never blocks the main analysis.
-    """
-    try:
-        if market_key not in MLB_STAT_MAP:
-            return ''
-        values = fetch_recent_stat_values(player_name, market_key, "baseball_mlb", limit=10)
-        if len(values) < 2:
-            return ''
-        recent = values[-5:]
-        label = MARKET_ESPN_MAP.get(market_key, (None, None, market_key))[2]
-
-        def _fmt(v):
-            return str(int(v)) if float(v).is_integer() else f"{v:.1f}"
-
-        shown = ', '.join(_fmt(v) for v in recent)
-        avg = sum(recent) / len(recent)
-        return (
-            f"📊 REAL PLAYER DATA (MLB Stats API — cite these, not generic league avgs): "
-            f"{player_name} last {len(recent)} games — {label}: "
-            f"{shown}  |  recent avg: {avg:.1f}"
-        )
-    except Exception:
-        return ''
+# market_key → the machine-readable column name in the gamelog's "names" list.
+# Compound columns (e.g. "made-attempted") are matched by prefix and the value's
+# first number (the "made" side) is used.
+ESPN_GAMELOG_STAT = {
+    # NBA
+    'player_points':        'points',
+    'player_rebounds':      'totalRebounds',
+    'player_assists':       'assists',
+    'player_threes':        'threePointFieldGoalsMade',   # compound "2-6" → 2
+    'player_blocks':        'blocks',
+    'player_steals':        'steals',
+    # NFL
+    'player_pass_yds':      'passingYards',
+    'player_pass_tds':      'passingTouchdowns',
+    'player_rush_yds':      'rushingYards',
+    'player_reception_yds': 'receivingYards',
+    'player_receptions':    'receptions',
+    # NHL
+    'player_goals':         'goals',
+    'player_shots_on_goal': 'shotsTotal',
+}
 
 
-def _find_stat_index(categories: list, cat_frag: str, stat_frags: list) -> int | None:
-    """Locate a stat's column index in an ESPN game-log 'categories' block.
-
-    ESPN groups stats into categories, each with its own list of column names;
-    the overall stat index is the running offset across categories. Returns
-    None if the stat isn't found.
-    """
-    offset = 0
-    for cat in categories:
-        idx_names = (cat.get('names') or cat.get('labels') or
-                     cat.get('displayNames') or cat.get('abbreviations') or [])
-        if cat_frag.lower() in cat.get('name', '').lower():
-            for i, n in enumerate(idx_names):
-                n_padded = ' ' + n.lower() + ' '
-                if any(f.lower() in n_padded or f.lower().strip() == n.lower().strip()
-                       for f in stat_frags):
-                    return offset + i
-        offset += len(idx_names)
+def _espn_athlete_id(player_name: str) -> str | None:
+    """Resolve a player name to their ESPN athlete id via the site search API."""
+    r = requests.get(ESPN_SEARCH_URL, params={"query": player_name, "limit": 5},
+                     headers=ESPN_HDR, timeout=6)
+    if r.status_code != 200:
+        return None
+    for group in r.json().get("results", []):
+        if "player" in str(group.get("type", "")).lower():
+            for c in group.get("contents", []):
+                # Player links look like ".../id/1966/lebron-james" or ".../id/3895074"
+                m = re.search(r"/id/(\d+)", (c.get("link") or {}).get("web", ""))
+                if m:
+                    return m.group(1)
     return None
 
 
 def _fetch_espn_stat_values(player_name: str, market_key: str, sport_key: str,
                             limit: int = 10) -> list:
-    """ESPN game-log fetch (non-MLB sports).
+    """Recent per-game values for NBA/NFL/NHL from ESPN's free game-log API.
 
-    NOTE: ESPN's unofficial athlete-search endpoint is currently unreliable, so
-    NBA/NFL/NHL need their own verified free source before their seasons matter.
-    Returns [] on any failure — never raises.
+    Returns values oldest → newest (matching the MLB fetcher), or [] on any
+    failure — never raises.
     """
     try:
         sport_info = ESPN_SPORT_MAP.get(sport_key)
-        stat_info = MARKET_ESPN_MAP.get(market_key)
-        if not sport_info or not stat_info:
+        target = ESPN_GAMELOG_STAT.get(market_key)
+        if not sport_info or not target:
             return []
         sport, league = sport_info
-        cat_frag, stat_frags, _ = stat_info
-        if isinstance(stat_frags, str):
-            stat_frags = [stat_frags]
 
-        # 1. Find the athlete
+        aid = _espn_athlete_id(player_name)
+        if not aid:
+            return []
+
         r = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/athletes",
-            params={'search': player_name, 'limit': 5}, headers=ESPN_HDR, timeout=5,
+            ESPN_GAMELOG_URL.format(sport=sport, league=league, aid=aid),
+            headers=ESPN_HDR, timeout=8,
         )
         if r.status_code != 200:
             return []
-        items = r.json().get('items', [])
-        if not items:
-            return []
-        athlete_id = str(items[0]['id'])
+        data = r.json()
 
-        # 2. Pull their game log
-        r = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}/gamelog",
-            headers=ESPN_HDR, timeout=6,
-        )
-        if r.status_code != 200:
+        # The "names" list labels each column; find our stat's index.
+        names = data.get("names") or []
+        idx = next((i for i, n in enumerate(names)
+                    if n == target or n.startswith(target + '-')), None)
+        if idx is None:
             return []
-        splits = r.json().get('splits', {})
-        stat_idx = _find_stat_index(splits.get('categories', []), cat_frag, stat_frags)
-        entries = splits.get('entries', [])
-        if stat_idx is None or not entries:
-            return []
+        compound = '-' in names[idx]   # e.g. "made-attempted" → take the made side
 
-        # 3. Extract the numeric value from each game
+        # Flatten every game across season types. ESPN lists them newest-first
+        # (both across blocks and within each), so we reverse to oldest → newest.
         values = []
-        for entry in entries:
-            raw = entry.get('stats', [])
-            if stat_idx < len(raw):
-                try:
-                    values.append(float(str(raw[stat_idx]).replace(',', '')))
-                except ValueError:
-                    pass
+        for season in data.get("seasonTypes", []):
+            for cat in season.get("categories", []):
+                for ev in cat.get("events", []):
+                    stats = ev.get("stats", [])
+                    if idx < len(stats):
+                        raw = str(stats[idx])
+                        if compound:
+                            raw = raw.split('-')[0]
+                        try:
+                            values.append(float(raw))
+                        except ValueError:
+                            pass
+        values.reverse()
         return values[-limit:] if limit else values
     except Exception:
         return []
