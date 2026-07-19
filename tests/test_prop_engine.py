@@ -382,3 +382,86 @@ class TestGetGameLinesESPN:
 
     def test_unknown_sport_returns_empty(self):
         assert pe.get_game_lines("quidditch_pro") == []
+
+
+# ─────────────────────────────────────────
+# GAME MODEL — value picks
+# ─────────────────────────────────────────
+
+class TestGameModelMath:
+    def test_ratings_and_league_average(self):
+        results = [
+            {"home": "A", "away": "B", "home_score": 6, "away_score": 3},
+            {"home": "B", "away": "A", "home_score": 2, "away_score": 5},
+        ]
+        ratings, lg = pe.compute_team_ratings(results)
+        # A scored 6 then 5 → 5.5; allowed 3 then 2 → 2.5
+        assert ratings["A"]["rs"] == pytest.approx(5.5)
+        assert ratings["A"]["ra"] == pytest.approx(2.5)
+        # League avg = all points / all team-games = (6+3+2+5)/4 = 4.0
+        assert lg == pytest.approx(4.0)
+
+    def test_stronger_offense_is_favored(self):
+        results = [
+            {"home": "A", "away": "B", "home_score": 8, "away_score": 2},
+            {"home": "B", "away": "A", "home_score": 2, "away_score": 8},
+            {"home": "A", "away": "C", "home_score": 7, "away_score": 3},
+            {"home": "C", "away": "B", "home_score": 5, "away_score": 4},
+        ]
+        ratings, lg = pe.compute_team_ratings(results)
+        cfg = dict(pe.GAME_MODEL_CONFIG["baseball_mlb"], min_games=1)
+        proj = pe.project_game("A", "B", ratings, lg, cfg)
+        assert proj["home_win_prob"] > 0.5
+        assert proj["proj_total"] > 0
+
+    def test_insufficient_games_returns_none(self):
+        ratings = {"A": {"rs": 5, "ra": 4, "games": 2},
+                   "B": {"rs": 4, "ra": 5, "games": 2}}
+        cfg = pe.GAME_MODEL_CONFIG["baseball_mlb"]   # min_games = 5
+        assert pe.project_game("A", "B", ratings, 4.5, cfg) is None
+
+    def test_missing_team_returns_none(self):
+        ratings = {"A": {"rs": 5, "ra": 4, "games": 9}}
+        cfg = dict(pe.GAME_MODEL_CONFIG["baseball_mlb"], min_games=1)
+        assert pe.project_game("A", "Ghost", ratings, 4.5, cfg) is None
+
+
+class TestGenerateGamePicks:
+    def _lines(self):
+        # Line (9.5) sits above the model's total (teams avg 4 → ~8) → Under lean.
+        return [{"id": "g1", "sport": "baseball_mlb",
+                 "home_team": "A", "away_team": "B",
+                 "commence_time": "2026-07-20T23:00Z",
+                 "h2h": {"home": -120, "away": 100},
+                 "spreads": None,
+                 "totals": {"line": 9.5, "over_odds": -110, "under_odds": -110},
+                 "source_book": "DraftKings"}]
+
+    def _results(self):
+        # Three round-robins of 4-4 games → every team averages 4 RS / 4 RA over
+        # 6 games (clears min_games=5), so the model total for A vs B is ~8.0.
+        games = []
+        for _ in range(3):
+            for h, a in (("A", "B"), ("A", "C"), ("B", "C")):
+                games.append({"home": h, "away": a, "home_score": 4, "away_score": 4})
+        return games
+
+    def test_flags_under_on_inflated_line(self, monkeypatch):
+        monkeypatch.setattr(pe, "get_game_lines", lambda s: self._lines())
+        monkeypatch.setattr(pe, "fetch_recent_results", lambda s, d: self._results())
+        picks = pe.generate_game_picks("baseball_mlb")
+        assert "g1" in picks
+        # These teams average ~3 runs; a 12.0 total is far too high → Under lean.
+        assert picks["g1"]["totals"]["pick"].startswith("Under")
+        assert picks["g1"]["totals"]["edge"] <= pe.GAME_MODEL_CONFIG["baseball_mlb"]["total_edge_cap"]
+
+    def test_unsupported_sport_returns_empty(self):
+        assert pe.generate_game_picks("quidditch_pro") == {}
+
+    def test_ml_edges_are_tempered(self, monkeypatch):
+        monkeypatch.setattr(pe, "get_game_lines", lambda s: self._lines())
+        monkeypatch.setattr(pe, "fetch_recent_results", lambda s, d: self._results())
+        picks = pe.generate_game_picks("baseball_mlb")
+        if "h2h" in picks.get("g1", {}):
+            # Market-anchored → no double-digit "edges".
+            assert picks["g1"]["h2h"]["edge"] < 10

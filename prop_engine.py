@@ -1341,6 +1341,240 @@ def print_analysis(result: dict):
 
 
 # ─────────────────────────────────────────
+# GAME MODEL — value picks (moneyline + total)
+#
+# A lightweight, recency-based model built entirely on free ESPN final scores.
+# For each upcoming game we estimate each team's expected runs/points from its
+# recent offense and the opponent's recent defense (scaled to league average),
+# then compare our projection to the market line to flag value. This is a
+# transparent "lean," not a sharp model — it uses recent form only, no injuries,
+# pitchers, rest, or travel. Keep the honesty in any UI copy.
+# ─────────────────────────────────────────
+
+# Per-sport tuning. pyth_exp = Pythagorean win-probability exponent (standard
+# values: MLB 1.83, NBA 13.9, NFL 2.37, NHL 2.0). home_adv and thresholds are
+# in that sport's scoring unit (runs/points/goals).
+GAME_MODEL_CONFIG = {
+    # market_weight: how much to trust the market vs our model (0.6 = market is
+    #   the prior, model nudges it). ml_gap_cap: if the raw model/market win-prob
+    #   gap exceeds this, the model is likely missing info (e.g. the starting
+    #   pitcher) — suppress the pick. total_edge_cap: max believable total edge.
+    "baseball_mlb":         {"lookback_days": 18, "home_adv": 0.15, "pyth_exp": 1.83, "regress_games": 5,
+                             "min_games": 5, "total_threshold": 0.5, "ml_threshold": 0.03, "unit": "runs",
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5},
+    "basketball_nba":       {"lookback_days": 24, "home_adv": 2.5,  "pyth_exp": 13.9, "regress_games": 4,
+                             "min_games": 5, "total_threshold": 3.0, "ml_threshold": 0.03, "unit": "pts",
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 14},
+    "americanfootball_nfl": {"lookback_days": 45, "home_adv": 2.0,  "pyth_exp": 2.37, "regress_games": 3,
+                             "min_games": 3, "total_threshold": 2.5, "ml_threshold": 0.03, "unit": "pts",
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 12},
+    "icehockey_nhl":        {"lookback_days": 21, "home_adv": 0.3,  "pyth_exp": 2.0, "regress_games": 5,
+                             "min_games": 5, "total_threshold": 0.6, "ml_threshold": 0.03, "unit": "goals",
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5},
+}
+
+
+def fetch_recent_results(sport_key: str, lookback_days: int) -> list:
+    """Final scores from ESPN over the last N days (free, one call per day).
+
+    Returns [{'home','away','home_score','away_score'}], finals only. [] on
+    failure — never raises.
+    """
+    sport_info = ESPN_SPORT_MAP.get(sport_key)
+    if not sport_info:
+        return []
+    sport, league = sport_info
+    url = ESPN_SCOREBOARD.format(sport=sport, league=league)
+
+    results = []
+    for i in range(1, int(lookback_days) + 1):
+        day = (date.today() - timedelta(days=i)).strftime("%Y%m%d")
+        try:
+            resp = requests.get(url, params={"dates": day}, headers=ESPN_HDR, timeout=8)
+            if resp.status_code != 200:
+                continue
+            for ev in resp.json().get("events", []):
+                if ev.get("status", {}).get("type", {}).get("state") != "post":
+                    continue
+                comp = (ev.get("competitions") or [{}])[0]
+                competitors = comp.get("competitors", [])
+                home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not home or not away:
+                    continue
+                home_name = home.get("team", {}).get("displayName") or ""
+                away_name = away.get("team", {}).get("displayName") or ""
+                # Skip exhibitions (e.g. the All-Star Game) — not real team form.
+                if "All-Star" in home_name or "All-Star" in away_name:
+                    continue
+                try:
+                    hs = int(home.get("score"))
+                    as_ = int(away.get("score"))
+                except (TypeError, ValueError):
+                    continue
+                results.append({
+                    "home":       home_name,
+                    "away":       away_name,
+                    "home_score": hs,
+                    "away_score": as_,
+                })
+        except requests.exceptions.RequestException:
+            continue
+    return results
+
+
+def compute_team_ratings(results: list) -> tuple:
+    """From recent games, build per-team scoring rates + the league average.
+
+    Returns (ratings, lg_avg) where ratings[team] = {'rs','ra','games'}:
+    rs = avg scored per game, ra = avg allowed per game. lg_avg = average points
+    a team scores per game across the sample (the model's baseline).
+    """
+    stats = {}
+    total_points, team_games = 0, 0
+    for g in results:
+        for team, sf, sa in ((g["home"], g["home_score"], g["away_score"]),
+                             (g["away"], g["away_score"], g["home_score"])):
+            d = stats.setdefault(team, {"scored": 0, "allowed": 0, "games": 0})
+            d["scored"] += sf
+            d["allowed"] += sa
+            d["games"] += 1
+            total_points += sf
+            team_games += 1
+    lg_avg = (total_points / team_games) if team_games else 0.0
+    ratings = {t: {"rs": d["scored"] / d["games"],
+                   "ra": d["allowed"] / d["games"],
+                   "games": d["games"]}
+               for t, d in stats.items()}
+    return ratings, lg_avg
+
+
+def project_game(home: str, away: str, ratings: dict, lg_avg: float, cfg: dict):
+    """Project a single game's total and home win probability. None if either
+    team lacks enough recent games."""
+    rh = ratings.get(home)
+    ra = ratings.get(away)
+    if not rh or not ra or lg_avg <= 0:
+        return None
+    if rh["games"] < cfg["min_games"] or ra["games"] < cfg["min_games"]:
+        return None
+
+    # Regress each rate toward league average by sample size, so a few blowouts
+    # (or a thin sample) can't produce absurd projections. K "phantom" league-
+    # average games are mixed in; more real games → less shrink.
+    K = cfg.get("regress_games", 4.0)
+
+    def _shrink(rate, games):
+        return (rate * games + K * lg_avg) / (games + K)
+
+    home_rs = _shrink(rh["rs"], rh["games"])
+    home_ra = _shrink(rh["ra"], rh["games"])
+    away_rs = _shrink(ra["rs"], ra["games"])
+    away_ra = _shrink(ra["ra"], ra["games"])
+
+    # Each team's expected score = its offense scaled by the opponent's defense,
+    # relative to league average (a log5-style matchup adjustment).
+    home_exp = home_rs * away_ra / lg_avg
+    away_exp = away_rs * home_ra / lg_avg
+    proj_total = home_exp + away_exp
+
+    # Home edge shifts win probability (redistribute, leaving the total intact).
+    adv = cfg["home_adv"] / 2.0
+    k = cfg["pyth_exp"]
+    he = max(home_exp + adv, 0.1)
+    ae = max(away_exp - adv, 0.1)
+    home_win_prob = he ** k / (he ** k + ae ** k)
+
+    return {
+        "proj_total":    proj_total,
+        "home_exp":      home_exp,
+        "away_exp":      away_exp,
+        "home_win_prob": home_win_prob,
+        "min_games":     min(rh["games"], ra["games"]),
+    }
+
+
+def generate_game_picks(sport_key: str) -> dict:
+    """Value picks for today's slate, keyed by game id.
+
+    picks[game_id] = {'totals': {...}, 'h2h': {...}, 'min_games', 'confidence'}
+    Only games where the model disagrees with the market by more than the
+    per-sport threshold get a pick. Returns {} if the sport isn't supported or
+    there isn't enough recent data.
+    """
+    cfg = GAME_MODEL_CONFIG.get(sport_key)
+    if not cfg:
+        return {}
+
+    games = get_game_lines(sport_key)
+    if not games:
+        return {}
+    ratings, lg_avg = compute_team_ratings(fetch_recent_results(sport_key, cfg["lookback_days"]))
+    if not ratings:
+        return {}
+
+    picks = {}
+    for g in games:
+        proj = project_game(g["home_team"], g["away_team"], ratings, lg_avg, cfg)
+        if not proj:
+            continue
+        entry = {}
+
+        # ── Total: model projection vs the posted line ──
+        # Flag a lean when the model differs by more than the threshold, but not
+        # by an implausible amount (that signals model noise, not a real edge).
+        totals = g.get("totals")
+        if totals and totals.get("line") is not None:
+            line = totals["line"]
+            diff = proj["proj_total"] - line
+            if cfg["total_threshold"] <= abs(diff) <= cfg["total_edge_cap"]:
+                side = "Over" if diff > 0 else "Under"
+                entry["totals"] = {
+                    "pick":  f"{side} {line}",
+                    "model": round(proj["proj_total"], 1),
+                    "line":  line,
+                    "edge":  round(abs(diff), 1),
+                    "unit":  cfg["unit"],
+                }
+
+        # ── Moneyline: a humble lean anchored to the market ──
+        # The market prices in things our free model can't (pitchers, injuries),
+        # so we treat it as the prior and only nudge it. If the raw model wildly
+        # disagrees, we're missing info — suppress rather than pretend it's value.
+        h2h = g.get("h2h")
+        if h2h and h2h.get("home") is not None and h2h.get("away") is not None:
+            mkt_home, mkt_away = remove_vig(h2h["home"], h2h["away"])
+            model_home = proj["home_win_prob"]
+            if abs(model_home - mkt_home) <= cfg["ml_gap_cap"]:
+                w = cfg["market_weight"]
+                blended_home = w * mkt_home + (1 - w) * model_home
+                home_edge = blended_home - mkt_home
+                away_edge = (1 - blended_home) - mkt_away
+                if home_edge >= cfg["ml_threshold"] and home_edge >= away_edge:
+                    entry["h2h"] = {
+                        "pick":        f"{g['home_team'].split()[-1]} ML",
+                        "model_prob":  round(blended_home, 3),
+                        "market_prob": round(mkt_home, 3),
+                        "edge":        round(home_edge * 100, 1),
+                    }
+                elif away_edge >= cfg["ml_threshold"]:
+                    entry["h2h"] = {
+                        "pick":        f"{g['away_team'].split()[-1]} ML",
+                        "model_prob":  round(1 - blended_home, 3),
+                        "market_prob": round(mkt_away, 3),
+                        "edge":        round(away_edge * 100, 1),
+                    }
+
+        if entry:
+            mg = proj["min_games"]
+            entry["min_games"] = mg
+            entry["confidence"] = "high" if mg >= 10 else "medium" if mg >= 7 else "low"
+            picks[g["id"]] = entry
+
+    return picks
+
+
+# ─────────────────────────────────────────
 # EXAMPLE / DEMO
 # ─────────────────────────────────────────
 

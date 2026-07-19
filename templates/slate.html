@@ -114,10 +114,24 @@
         /* ── Slate cards ── */
         .slate-card {
             background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-            margin-bottom: 10px; display: grid; grid-template-columns: 1fr 230px;
-            gap: 16px; align-items: center; padding: 16px 20px; transition: border-color 0.15s;
+            margin-bottom: 10px; padding: 16px 20px; transition: border-color 0.15s;
+            display: flex; flex-direction: column; gap: 12px;
         }
         .slate-card:hover { border-color: var(--accent); }
+        .slate-card.has-pick { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+        .card-main { display: grid; grid-template-columns: 1fr 230px; gap: 16px; align-items: center; }
+
+        /* ── Model-lean bar ── */
+        .pick-bar {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            font-size: 12.5px; color: var(--text-2);
+            background: var(--accent-glow); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+            border-radius: 8px; padding: 8px 12px;
+        }
+        .pick-star { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; color: var(--accent); white-space: nowrap; }
+        .pick-bar b { color: var(--text); }
+        .pick-edge { color: var(--green); font-weight: 800; }
+        .pick-sample { color: var(--muted); font-size: 10px; margin-left: auto; }
         .matchup-text { font-size: 15px; font-weight: 700; }
         .matchup-at { color: var(--muted); font-weight: 500; margin: 0 4px; }
         .game-time { font-size: 12px; color: var(--muted); margin-top: 4px; }
@@ -180,7 +194,7 @@
 <div class="container">
     <div class="page-header">
         <div class="page-title">Daily Slate</div>
-        <div class="page-subtitle">Today's games across every market — moneyline, spread, and total.</div>
+        <div class="page-subtitle">Today's games across every market — with ⭐ PropJunkie model leans on moneyline &amp; total.</div>
     </div>
 
     <div class="sport-tabs">
@@ -206,6 +220,7 @@
     let selectedSport  = 'baseball_mlb';
     let selectedMarket = 'h2h';
     let cachedGames    = [];   // last fetched games — market tabs re-render from this (no refetch)
+    let cachedPicks    = {};   // gameId → model leans {h2h, totals, confidence}
 
     // ── Theme ────────────────────────────────────────────────────────
     function toggleTheme() {
@@ -291,15 +306,35 @@
           <div class="pick-row"><span class="pick-side">Under<span class="pick-line">${g.totals.line}</span></span><span class="pick-odds ${u.cls}">${u.text}</span></div>`;
     }
 
+    // Model lean for the active market on this game (only h2h + totals modelled).
+    function pickBar(gameId) {
+        const pk = cachedPicks[gameId];
+        if (!pk) return '';
+        const sample = pk.min_games ? `<span class="pick-sample">last ${pk.min_games} games</span>` : '';
+        if (selectedMarket === 'totals' && pk.totals) {
+            const t = pk.totals;
+            return `<div class="pick-bar"><span class="pick-star">⭐ MODEL LEAN</span> <b>${t.pick}</b> · proj ${t.model} <span class="pick-edge">+${t.edge} ${t.unit}</span>${sample}</div>`;
+        }
+        if (selectedMarket === 'h2h' && pk.h2h) {
+            const h = pk.h2h;
+            return `<div class="pick-bar"><span class="pick-star">⭐ MODEL LEAN</span> <b>${h.pick}</b> · model ${Math.round(h.model_prob * 100)}% vs mkt ${Math.round(h.market_prob * 100)}% <span class="pick-edge">+${h.edge}%</span>${sample}</div>`;
+        }
+        return '';
+    }
+
     function renderCard(g) {
+        const bar = pickBar(g.id);
         return `
-          <div class="slate-card">
-            <div class="game-info">
-              <div class="matchup-text">${g.away_team}<span class="matchup-at">@</span>${g.home_team}</div>
-              <div class="game-time">${gameTime(g.commence_time)}</div>
-              ${g.source_book ? `<div class="book-tag">${g.source_book}</div>` : ''}
+          <div class="slate-card ${bar ? 'has-pick' : ''}">
+            <div class="card-main">
+              <div class="game-info">
+                <div class="matchup-text">${g.away_team}<span class="matchup-at">@</span>${g.home_team}</div>
+                <div class="game-time">${gameTime(g.commence_time)}</div>
+                ${g.source_book ? `<div class="book-tag">${g.source_book}</div>` : ''}
+              </div>
+              <div class="pick-col">${marketRows(g, selectedMarket)}</div>
             </div>
-            <div class="pick-col">${marketRows(g, selectedMarket)}</div>
+            ${bar}
           </div>`;
     }
 
@@ -314,13 +349,19 @@
         for (const [label, games] of Object.entries(groups)) {
             html += `<div class="date-group"><div class="date-label">${label}</div>${games.map(renderCard).join('')}</div>`;
         }
-        html += `<div class="note-bar">Odds from the best available book · shared 15-min cache to protect our free data quota.<br>Model-driven value picks are coming next.</div>`;
+        html += `<div class="note-bar">Odds from DraftKings via ESPN (free). ⭐ Model leans compare our projection — built from each team's recent scoring — to the market line. They're a lean, not a lock: recent form only, no pitchers/injuries/rest. Bet responsibly.</div>`;
         container.innerHTML = html;
     }
 
     async function loadSlate(sport) {
         const container = document.getElementById('slateContainer');
         container.innerHTML = '<div class="loading-state"><div class="spinner"></div>Loading slate…</div>';
+        cachedPicks = {};
+        // Model leans load in parallel; they're optional, so failures are silent.
+        const picksPromise = fetch(`${API}/game-picks/${sport}`)
+            .then(r => r.ok ? r.json() : {})
+            .then(p => { cachedPicks = (p && !p.error) ? p : {}; })
+            .catch(() => { cachedPicks = {}; });
         try {
             const res = await fetch(`${API}/game-lines/${sport}`);
             let games = await res.json();
@@ -339,6 +380,7 @@
                 } catch { games = []; }
             }
             cachedGames = Array.isArray(games) ? games : [];
+            await picksPromise;        // let model leans arrive before first paint
             render();
         } catch (e) {
             container.innerHTML = `<div class="empty-state">Could not load the slate right now. Try refreshing.</div>`;

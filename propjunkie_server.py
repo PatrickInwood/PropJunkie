@@ -33,7 +33,7 @@ from flask_limiter.util import get_remote_address
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks
 from models import db, User
 from forms import (
     SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
@@ -416,6 +416,34 @@ def game_lines(sport):
         return jsonify(data)
     except Exception:
         logger.exception("Error fetching game lines for %s", sport)
+        return jsonify({'error': _GENERIC_ERROR}), 500
+
+
+# ─────────────────────────────────────────
+# GAME PICKS — model value leans (moneyline + total)
+# Heavier to compute (scans ~3 weeks of ESPN scores), so cache for 2 hours.
+# ─────────────────────────────────────────
+
+_picks_cache: dict = {}   # sport_key → {'data': dict, 'ts': float}
+_PICKS_TTL = 7200         # seconds (2h) — the model moves slowly
+
+@app.route('/game-picks/<sport>', methods=['GET'])
+@limiter.limit("20 per minute")
+def game_picks(sport):
+    """
+    GET /game-picks/baseball_mlb
+    Returns PropJunkie's model leans keyed by game id: {gameId: {h2h, totals, ...}}.
+    """
+    now = time.time()
+    cached = _picks_cache.get(sport)
+    if cached and (now - cached['ts']) < _PICKS_TTL:
+        return jsonify(cached['data'])
+    try:
+        data = generate_game_picks(sport)
+        _picks_cache[sport] = {'data': data, 'ts': now}
+        return jsonify(data)
+    except Exception:
+        logger.exception("Error generating game picks for %s", sport)
         return jsonify({'error': _GENERIC_ERROR}), 500
 
 
