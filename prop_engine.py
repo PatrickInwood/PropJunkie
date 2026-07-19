@@ -312,9 +312,14 @@ MARKET_ESPN_MAP = {
 
 def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str) -> str:
     """
-    Fetch player's recent stats from ESPN's unofficial API (free, no key needed).
+    Fetch player's recent stats for the AI analysis prompt (free, no key needed).
     Returns '' on any error — never blocks the main analysis.
+
+    MLB is routed through the official MLB Stats API, which is reliable; ESPN's
+    unofficial athlete-search endpoint (used for the other sports) is not.
     """
+    if sport_key == "baseball_mlb":
+        return _mlb_player_context(player_name, market_key)
     try:
         sport_info = ESPN_SPORT_MAP.get(sport_key)
         if not sport_info:
@@ -660,6 +665,36 @@ def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
         return values[-limit:] if limit else values
     except Exception:
         return []
+
+
+def _mlb_player_context(player_name: str, market_key: str) -> str:
+    """Build the AI prompt's recent-game context for MLB from the official Stats API.
+
+    Reuses the same free data source as the projection engine, so the analysis
+    cites the player's real recent games instead of generic league averages.
+    Returns '' on any error so it never blocks the main analysis.
+    """
+    try:
+        if market_key not in MLB_STAT_MAP:
+            return ''
+        values = fetch_recent_stat_values(player_name, market_key, "baseball_mlb", limit=10)
+        if len(values) < 2:
+            return ''
+        recent = values[-5:]
+        label = MARKET_ESPN_MAP.get(market_key, (None, None, market_key))[2]
+
+        def _fmt(v):
+            return str(int(v)) if float(v).is_integer() else f"{v:.1f}"
+
+        shown = ', '.join(_fmt(v) for v in recent)
+        avg = sum(recent) / len(recent)
+        return (
+            f"📊 REAL PLAYER DATA (MLB Stats API — cite these, not generic league avgs): "
+            f"{player_name} last {len(recent)} games — {label}: "
+            f"{shown}  |  recent avg: {avg:.1f}"
+        )
+    except Exception:
+        return ''
 
 
 def _find_stat_index(categories: list, cat_frag: str, stat_frags: list) -> int | None:

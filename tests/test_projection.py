@@ -136,6 +136,26 @@ class TestFetchMLBValues:
         assert pe.fetch_recent_stat_values("X", "player_batter_doubles", "baseball_mlb") == []
 
 
+# ── MLB analysis context (routes through the Stats API, not ESPN) ─────
+
+class TestMLBPlayerContext:
+    def test_mlb_uses_statsapi_not_espn(self, monkeypatch):
+        # If ESPN's requests.get were ever hit for MLB, this would blow up.
+        monkeypatch.setattr(pe, "fetch_recent_stat_values",
+                            lambda *a, **k: [0.0, 2.0, 1.0, 3.0, 1.0])
+        ctx = pe.fetch_espn_player_context("Aaron Judge", "player_batter_hits", "baseball_mlb")
+        assert "MLB Stats API" in ctx
+        assert "0, 2, 1, 3, 1" in ctx      # integers, not 0.0/2.0
+        assert "recent avg: 1.4" in ctx
+
+    def test_mlb_thin_sample_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(pe, "fetch_recent_stat_values", lambda *a, **k: [1.0])
+        assert pe.fetch_espn_player_context("X", "player_batter_hits", "baseball_mlb") == ""
+
+    def test_mlb_unsupported_market_returns_empty(self):
+        assert pe.fetch_espn_player_context("X", "player_batter_doubles", "baseball_mlb") == ""
+
+
 # ── /generate-projection route ───────────────────────────────────────
 
 class TestGenerateProjectionRoute:
