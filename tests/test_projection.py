@@ -134,3 +134,22 @@ class TestFetchMLBValues:
     def test_unsupported_mlb_market_returns_empty(self):
         # Not in MLB_STAT_MAP → short-circuits before any network call.
         assert pe.fetch_recent_stat_values("X", "player_batter_doubles", "baseball_mlb") == []
+
+
+# ── /generate-projection route ───────────────────────────────────────
+
+class TestGenerateProjectionRoute:
+    def test_missing_fields_returns_400(self, client):
+        assert client.post("/generate-projection", json={"player": "X"}).status_code == 400
+
+    def test_returns_generated_projection(self, client, monkeypatch):
+        import propjunkie_server as srv
+        monkeypatch.setattr(srv, "generate_projection", lambda *a, **k: {
+            "projection": 1.2, "games_used": 8, "recent_values": [1, 2, 1],
+            "low_confidence": False, "reason": None,
+        })
+        r = client.post("/generate-projection", json={
+            "player": "Aaron Judge", "market": "player_batter_hits", "sport": "baseball_mlb",
+        })
+        assert r.status_code == 200
+        assert r.get_json()["projection"] == 1.2

@@ -837,8 +837,15 @@
             </div>
 
             <div class="form-group">
-                <label>Your Projection</label>
-                <input type="number" id="projection" placeholder="e.g. 26.5" step="0.5" min="0">
+                <label>Projection <span style="color:var(--muted);font-weight:400;font-size:11px;">— generate it, or enter your own</span></label>
+                <div style="display:flex;gap:8px;">
+                    <input type="number" id="projection" placeholder="e.g. 26.5" step="0.5" min="0" style="flex:1;">
+                    <button type="button" id="generateBtn" onclick="generateProjection()"
+                            style="white-space:nowrap;padding:0 15px;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">
+                        ✨ Generate
+                    </button>
+                </div>
+                <div id="projMeta" style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45;"></div>
             </div>
 
             <div class="form-group" id="playerTypeGroup" style="display:none;">
@@ -1348,6 +1355,39 @@
     }
 
     // ── Analyze prop ──────────────────────────────────────────────────
+    async function generateProjection() {
+        const player = document.getElementById('playerName').value.trim();
+        const market = document.getElementById('market').value;
+        const btn    = document.getElementById('generateBtn');
+        const meta   = document.getElementById('projMeta');
+        if (!player)        { showToast('⚠ Enter a player name'); return; }
+        if (!selectedSport) { showToast('⚠ Select a game first'); return; }
+
+        const label = btn.textContent;
+        btn.disabled = true; btn.textContent = '…'; meta.textContent = '';
+        try {
+            const res  = await fetch(`${API}/generate-projection`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player, market, sport: selectedSport })
+            });
+            const data = await res.json();
+            if (data.projection != null) {
+                document.getElementById('projection').value = data.projection;
+                const recent = (data.recent_values || []).slice(-5).join(', ');
+                const conf   = data.low_confidence ? ' · thin sample — take with caution' : '';
+                meta.innerHTML = `📊 <b>PropJunkie projection</b> — from the last ${data.games_used} games${conf}`
+                               + (recent ? `<br>Recent: ${recent}` : '');
+            } else {
+                meta.textContent = data.reason || 'Not enough recent data to project — enter your own.';
+            }
+        } catch (e) {
+            meta.textContent = 'Could not generate right now — enter your own projection.';
+        } finally {
+            btn.disabled = false; btn.textContent = label;
+        }
+    }
+
     async function analyzeProp() {
         const player     = document.getElementById('playerName').value.trim();
         const projection = parseFloat(document.getElementById('projection').value);

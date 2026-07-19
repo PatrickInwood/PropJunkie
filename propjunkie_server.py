@@ -33,7 +33,7 @@ from flask_limiter.util import get_remote_address
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection
 from models import db, User
 from forms import (
     SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
@@ -420,6 +420,23 @@ def events(sport):
 # ANALYZE PROP — core endpoint
 # Rate limited to 5/minute per IP (free tier)
 # ─────────────────────────────────────────
+
+@app.route('/generate-projection', methods=['POST'])
+@limiter.limit("30 per minute")
+def generate_projection_route():
+    """Generate PropJunkie's own projection for a player's stat (free, no line needed)."""
+    data = request.get_json(silent=True) or {}
+    player = (data.get('player') or '').strip()
+    market = data.get('market')
+    sport = data.get('sport')
+    if not player or not market or not sport:
+        return jsonify({'error': 'Required fields: player, market, sport'}), 400
+    try:
+        return jsonify(generate_projection(player, market, sport))
+    except Exception:
+        logger.exception("Error generating projection for player=%s", player)
+        return jsonify({'error': _GENERIC_ERROR}), 500
+
 
 @app.route('/analyze-prop', methods=['POST'])
 @limiter.limit("5 per minute; 20 per hour")
