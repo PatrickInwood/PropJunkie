@@ -592,6 +592,20 @@
         return Object.values(scoresMap).some(g => g.scores?.length > 0 && !g.completed);
     }
 
+    // Only worth polling if a game is live, or one is upcoming / could still be
+    // in progress (started within the last 5h). Once every game is final, stop —
+    // no point spending Odds API quota on a day that's over.
+    function shouldKeepPolling(games) {
+        const now = Date.now();
+        for (const g of games || []) {
+            const sc = scoresMap[g.id];
+            if (sc && sc.scores?.length > 0 && !sc.completed) return true;
+            const start = new Date(g.commence_time).getTime();
+            if (start > now - 5 * 3600 * 1000) return true;
+        }
+        return false;
+    }
+
     function renderGame(g) {
         const home = g.home_team;
         const away = g.away_team;
@@ -728,32 +742,40 @@
 
             renderAll(games);
 
-            // Always poll for score updates — games may start after the page loads.
-            // The badge only renders when scores actually exist, so polling is harmless.
-            liveTimer = setInterval(async () => {
-                await loadScores(sport);
-                // Re-fetch lines; fall back to events if still no odds
-                let fresh = [];
-                try {
-                    const r = await fetch(`${API}/game-lines/${sport}`);
-                    fresh = await r.json();
-                } catch {}
-                if (!Array.isArray(fresh) || fresh.length === 0) {
+            // Poll for score updates while games are live or upcoming, then stop.
+            // The badge only renders when scores exist; server-side caching means
+            // many viewers share one API call, and we halt once the day is final.
+            if (shouldKeepPolling(games)) {
+                liveTimer = setInterval(async () => {
+                    await loadScores(sport);
+                    // Re-fetch lines; fall back to events if still no odds
+                    let fresh = [];
                     try {
-                        const evRes = await fetch(`${API}/events/${sport}`);
-                        const evts  = await evRes.json();
-                        if (Array.isArray(evts) && evts.length > 0) {
-                            fresh = evts.map(e => ({
-                                id: e.id, sport, home_team: e.home_team,
-                                away_team: e.away_team, commence_time: e.commence_time,
-                                h2h: null, spreads: null, totals: null,
-                                source_book: 'Lines pending',
-                            }));
-                        }
+                        const r = await fetch(`${API}/game-lines/${sport}`);
+                        fresh = await r.json();
                     } catch {}
-                }
-                if (fresh.length > 0) renderAll(fresh);
-            }, 60000);
+                    if (!Array.isArray(fresh) || fresh.length === 0) {
+                        try {
+                            const evRes = await fetch(`${API}/events/${sport}`);
+                            const evts  = await evRes.json();
+                            if (Array.isArray(evts) && evts.length > 0) {
+                                fresh = evts.map(e => ({
+                                    id: e.id, sport, home_team: e.home_team,
+                                    away_team: e.away_team, commence_time: e.commence_time,
+                                    h2h: null, spreads: null, totals: null,
+                                    source_book: 'Lines pending',
+                                }));
+                            }
+                        } catch {}
+                    }
+                    if (fresh.length > 0) renderAll(fresh);
+                    // All games final? Stop polling — nothing left to update.
+                    if (!shouldKeepPolling(fresh)) {
+                        clearInterval(liveTimer);
+                        liveTimer = null;
+                    }
+                }, 90000);
+            }
         } catch(e) {
             container.innerHTML = `<div class="empty-state">Could not load lines. Check your Odds API key.</div>`;
         }

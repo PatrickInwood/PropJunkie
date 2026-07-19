@@ -347,7 +347,14 @@ def health():
 
 # ─────────────────────────────────────────
 # LIVE SCORES
+# Shared server-side cache: the Odds API /scores endpoint consumes quota, and
+# the Live Lines page polls it while open. Without a shared cache, every viewer
+# every minute is a fresh API hit — enough to drain the free tier in a day.
+# One cache entry per (sport, daysFrom) serves all viewers for _SCORES_TTL.
 # ─────────────────────────────────────────
+
+_scores_cache: dict = {}   # (sport, days_from) → {'data': list, 'ts': float}
+_SCORES_TTL = 45           # seconds — still feels live, but caps API burn
 
 @app.route('/scores/<sport>', methods=['GET'])
 @limiter.limit("30 per minute")
@@ -359,7 +366,17 @@ def game_scores(sport):
     """
     try:
         days_from = int(request.args.get('daysFrom', 1))
+    except (TypeError, ValueError):
+        days_from = 1
+
+    cache_key = (sport, days_from)
+    now = time.time()
+    cached = _scores_cache.get(cache_key)
+    if cached and (now - cached['ts']) < _SCORES_TTL:
+        return jsonify(cached['data'])
+    try:
         data = get_game_scores(sport, days_from=days_from)
+        _scores_cache[cache_key] = {'data': data, 'ts': now}
         return jsonify(data)
     except Exception:
         logger.exception("Error fetching scores for %s", sport)
@@ -368,11 +385,12 @@ def game_scores(sport):
 
 # ─────────────────────────────────────────
 # GAME LINES — ML, spreads, totals
-# 5-minute server-side cache to conserve Odds API quota
+# Server-side cache to conserve Odds API quota. Odds move slowly for our
+# purposes, so a longer TTL trades a little freshness for a lot of quota.
 # ─────────────────────────────────────────
 
 _lines_cache: dict = {}   # sport_key → {'data': list, 'ts': float}
-_LINES_TTL = 300          # seconds
+_LINES_TTL = 900          # seconds (15 min) — shared across all viewers
 
 @app.route('/game-lines/<sport>', methods=['GET'])
 @limiter.limit("20 per minute")
