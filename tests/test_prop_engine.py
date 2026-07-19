@@ -265,3 +265,67 @@ class TestScanProps:
         monkeypatch.setattr(pe, "get_event_props", lambda *a, **k: {"bookmakers": []})
         props = [{"player": "Nobody", "projection": 10.0, "market": "player_points"}]
         assert pe.scan_props(props, "basketball_nba", "evt123") == []
+
+
+# ─────────────────────────────────────────
+# LIVE SCORES (ESPN scoreboard — free, mocked)
+# ─────────────────────────────────────────
+
+class _ScoreResp:
+    status_code = 200
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def _fake_scoreboard(url, **kwargs):
+    # Only today's board (no ?dates=) returns games; prior days are empty.
+    if kwargs.get("params"):
+        return _ScoreResp({"events": []})
+    return _ScoreResp({"events": [
+        {"id": "1", "date": "2026-07-19T23:00Z",
+         "status": {"type": {"state": "in", "shortDetail": "Top 7th"}},
+         "competitions": [{"competitors": [
+             {"homeAway": "home", "team": {"displayName": "Philadelphia Phillies"}, "score": "0"},
+             {"homeAway": "away", "team": {"displayName": "New York Mets"}, "score": "6"},
+         ]}]},
+        {"id": "2", "date": "2026-07-19T20:00Z",
+         "status": {"type": {"state": "post", "shortDetail": "Final"}},
+         "competitions": [{"competitors": [
+             {"homeAway": "home", "team": {"displayName": "New York Yankees"}, "score": "2"},
+             {"homeAway": "away", "team": {"displayName": "Los Angeles Dodgers"}, "score": "8"},
+         ]}]},
+        {"id": "3", "date": "2026-07-20T02:00Z",   # not started → no scores
+         "status": {"type": {"state": "pre", "shortDetail": "9:00 PM"}},
+         "competitions": [{"competitors": [
+             {"homeAway": "home", "team": {"displayName": "San Diego Padres"}, "score": "0"},
+             {"homeAway": "away", "team": {"displayName": "San Francisco Giants"}, "score": "0"},
+         ]}]},
+    ]})
+
+
+class TestGetGameScores:
+    def test_parses_live_final_and_pregame(self, monkeypatch):
+        monkeypatch.setattr(pe.requests, "get", _fake_scoreboard)
+        games = pe.get_game_scores("baseball_mlb", days_from=0)
+        assert len(games) == 3
+        live = next(g for g in games if g["id"] == "1")
+        assert live["completed"] is False
+        assert live["status_detail"] == "Top 7th"
+        assert {"name": "New York Mets", "score": "6"} in live["scores"]
+        final = next(g for g in games if g["id"] == "2")
+        assert final["completed"] is True
+        pre = next(g for g in games if g["id"] == "3")
+        assert pre["scores"] == []          # no score until the game starts
+
+    def test_unknown_sport_returns_empty(self):
+        assert pe.get_game_scores("quidditch_pro") == []
+
+    def test_network_error_returns_empty(self, monkeypatch):
+        def _boom(url, **k):
+            raise pe.requests.exceptions.RequestException("down")
+        monkeypatch.setattr(pe.requests, "get", _boom)
+        assert pe.get_game_scores("baseball_mlb") == []

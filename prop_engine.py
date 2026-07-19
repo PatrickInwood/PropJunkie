@@ -23,7 +23,7 @@ import os
 import re
 import json
 import math
-from datetime import date
+from datetime import date, timedelta
 import requests
 from scipy import stats
 import anthropic
@@ -117,34 +117,80 @@ def get_events(sport_key: str) -> list:
     return resp.json()
 
 
+ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard"
+
+
 def get_game_scores(sport_key: str, days_from: int = 1) -> list:
     """
-    Fetch live and recently completed scores from The Odds API.
+    Fetch live and recently completed scores from ESPN's free scoreboard API.
+
+    ESPN needs no API key and has no request quota, so — unlike the Odds API —
+    polling it for live scores never eats into our paid-data budget. Team names
+    match the Odds API's, so the front end pairs scores to lines by name.
 
     Args:
         sport_key: e.g. 'baseball_mlb'
-        days_from: include completed games from the last N days (0–3)
+        days_from: also include finals from the last N days (0–3); today's board
+                   already covers live games and today's finals.
 
     Returns:
         List of game objects, each with:
           - id, home_team, away_team, commence_time
           - completed (bool)
-          - scores: [{"name": "Team Name", "score": "5"}, ...]
-          - last_update (ISO string, or null if not started)
+          - scores: [{"name": "Team Name", "score": "5"}, ...]  (empty until start)
+          - status_detail: e.g. "Top 7th" / "Final" (for future display)
     """
-    url = f"{ODDS_API_BASE}/sports/{sport_key}/scores"
-    params = {
-        "apiKey":   ODDS_API_KEY,
-        "daysFrom": min(int(days_from), 3),
-    }
+    sport_info = ESPN_SPORT_MAP.get(sport_key)
+    if not sport_info:
+        return []
+    sport, league = sport_info
+    url = ESPN_SCOREBOARD.format(sport=sport, league=league)
+
+    # Today's board (no date param) covers live + today's finals; add prior days.
+    date_params = [None]
+    for i in range(1, min(int(days_from), 3) + 1):
+        date_params.append((date.today() - timedelta(days=i)).strftime("%Y%m%d"))
+
+    games, seen = [], set()
     try:
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code in (422, 404):
-            return []
-        _safe_http_raise(resp)
-        return resp.json()
+        for dp in date_params:
+            resp = requests.get(url, params=({"dates": dp} if dp else {}),
+                                headers=ESPN_HDR, timeout=8)
+            if resp.status_code != 200:
+                continue
+            for ev in resp.json().get("events", []):
+                eid = ev.get("id")
+                if eid in seen:
+                    continue
+                seen.add(eid)
+                comp = (ev.get("competitions") or [{}])[0]
+                type_info = ev.get("status", {}).get("type", {})
+                state = type_info.get("state")   # 'pre' | 'in' | 'post'
+                competitors = comp.get("competitors", [])
+                home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not home or not away:
+                    continue
+                home_name = home.get("team", {}).get("displayName")
+                away_name = away.get("team", {}).get("displayName")
+                scores = []
+                if state in ("in", "post"):
+                    scores = [
+                        {"name": home_name, "score": str(home.get("score", ""))},
+                        {"name": away_name, "score": str(away.get("score", ""))},
+                    ]
+                games.append({
+                    "id":            eid,
+                    "home_team":     home_name,
+                    "away_team":     away_name,
+                    "commence_time": ev.get("date"),
+                    "completed":     state == "post",
+                    "scores":        scores,
+                    "status_detail": type_info.get("shortDetail"),
+                })
+        return games
     except requests.exceptions.RequestException as e:
-        print(f"[PropJunkie] Scores API error for {sport_key}: {e}")
+        print(f"[PropJunkie] ESPN scores error for {sport_key}: {e}")
         return []
 
 
