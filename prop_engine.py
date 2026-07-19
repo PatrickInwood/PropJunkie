@@ -23,6 +23,7 @@ import os
 import re
 import json
 import math
+from datetime import date
 import requests
 from scipy import stats
 import anthropic
@@ -581,6 +582,208 @@ def fetch_espn_defense_context(
         return ''
     except Exception:
         return ''
+
+
+# ─────────────────────────────────────────
+# PROJECTION ENGINE
+# Generate our own projection for a player's stat from their recent games.
+# Data source is per-sport: MLB uses MLB's official free Stats API (reliable);
+# other sports use ESPN (whose unofficial endpoints are currently flaky and
+# need their own verified source before those seasons matter).
+# ─────────────────────────────────────────
+
+MLB_STATS_BASE = "https://statsapi.mlb.com/api/v1"
+
+# market_key → (statsapi stat group, per-game stat field)
+MLB_STAT_MAP = {
+    "player_batter_hits":          ("hitting", "hits"),
+    "player_batter_total_bases":   ("hitting", "totalBases"),
+    "player_batter_home_runs":     ("hitting", "homeRuns"),
+    "player_batter_rbis":          ("hitting", "rbi"),
+    "player_batter_runs_scored":   ("hitting", "runs"),
+    "player_batter_stolen_bases":  ("hitting", "stolenBases"),
+    "player_pitcher_strikeouts":   ("pitching", "strikeOuts"),
+    "player_pitcher_hits_allowed": ("pitching", "hits"),
+}
+
+
+def fetch_recent_stat_values(player_name: str, market_key: str, sport_key: str,
+                             limit: int = 10) -> list:
+    """Return a player's recent numeric values for a stat (oldest → newest).
+
+    Dispatches to the right free data source per sport. Returns [] on failure.
+    """
+    if sport_key == "baseball_mlb":
+        return _fetch_mlb_stat_values(player_name, market_key, sport_key, limit)
+    return _fetch_espn_stat_values(player_name, market_key, sport_key, limit)
+
+
+def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
+                           limit: int = 10) -> list:
+    """Recent per-game values from MLB's official free Stats API (no key needed)."""
+    try:
+        mapping = MLB_STAT_MAP.get(market_key)
+        if not mapping:
+            return []
+        group, field = mapping
+
+        # 1. Resolve the player's MLB id by name
+        r = requests.get(f"{MLB_STATS_BASE}/people/search",
+                         params={"names": player_name}, headers=ESPN_HDR, timeout=6)
+        if r.status_code != 200:
+            return []
+        people = r.json().get("people", [])
+        if not people:
+            return []
+        pid = people[0]["id"]
+
+        # 2. Pull this season's game log for the right stat group
+        r = requests.get(
+            f"{MLB_STATS_BASE}/people/{pid}/stats",
+            params={"stats": "gameLog", "group": group, "season": date.today().year},
+            headers=ESPN_HDR, timeout=8,
+        )
+        if r.status_code != 200:
+            return []
+        stat_blocks = r.json().get("stats", [])
+        splits = stat_blocks[0].get("splits", []) if stat_blocks else []
+
+        # 3. Pull the per-game value (splits are already oldest → newest)
+        values = []
+        for s in splits:
+            v = s.get("stat", {}).get(field)
+            if v is not None:
+                try:
+                    values.append(float(v))
+                except (ValueError, TypeError):
+                    pass
+        return values[-limit:] if limit else values
+    except Exception:
+        return []
+
+
+def _find_stat_index(categories: list, cat_frag: str, stat_frags: list) -> int | None:
+    """Locate a stat's column index in an ESPN game-log 'categories' block.
+
+    ESPN groups stats into categories, each with its own list of column names;
+    the overall stat index is the running offset across categories. Returns
+    None if the stat isn't found.
+    """
+    offset = 0
+    for cat in categories:
+        idx_names = (cat.get('names') or cat.get('labels') or
+                     cat.get('displayNames') or cat.get('abbreviations') or [])
+        if cat_frag.lower() in cat.get('name', '').lower():
+            for i, n in enumerate(idx_names):
+                n_padded = ' ' + n.lower() + ' '
+                if any(f.lower() in n_padded or f.lower().strip() == n.lower().strip()
+                       for f in stat_frags):
+                    return offset + i
+        offset += len(idx_names)
+    return None
+
+
+def _fetch_espn_stat_values(player_name: str, market_key: str, sport_key: str,
+                            limit: int = 10) -> list:
+    """ESPN game-log fetch (non-MLB sports).
+
+    NOTE: ESPN's unofficial athlete-search endpoint is currently unreliable, so
+    NBA/NFL/NHL need their own verified free source before their seasons matter.
+    Returns [] on any failure — never raises.
+    """
+    try:
+        sport_info = ESPN_SPORT_MAP.get(sport_key)
+        stat_info = MARKET_ESPN_MAP.get(market_key)
+        if not sport_info or not stat_info:
+            return []
+        sport, league = sport_info
+        cat_frag, stat_frags, _ = stat_info
+        if isinstance(stat_frags, str):
+            stat_frags = [stat_frags]
+
+        # 1. Find the athlete
+        r = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/athletes",
+            params={'search': player_name, 'limit': 5}, headers=ESPN_HDR, timeout=5,
+        )
+        if r.status_code != 200:
+            return []
+        items = r.json().get('items', [])
+        if not items:
+            return []
+        athlete_id = str(items[0]['id'])
+
+        # 2. Pull their game log
+        r = requests.get(
+            f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}/gamelog",
+            headers=ESPN_HDR, timeout=6,
+        )
+        if r.status_code != 200:
+            return []
+        splits = r.json().get('splits', {})
+        stat_idx = _find_stat_index(splits.get('categories', []), cat_frag, stat_frags)
+        entries = splits.get('entries', [])
+        if stat_idx is None or not entries:
+            return []
+
+        # 3. Extract the numeric value from each game
+        values = []
+        for entry in entries:
+            raw = entry.get('stats', [])
+            if stat_idx < len(raw):
+                try:
+                    values.append(float(str(raw[stat_idx]).replace(',', '')))
+                except ValueError:
+                    pass
+        return values[-limit:] if limit else values
+    except Exception:
+        return []
+
+
+def weighted_projection(values: list, half_life: float = 3.0) -> float | None:
+    """Recency-weighted average of recent game values (oldest → newest).
+
+    Recent games count more, so hot/cold streaks move the projection. `half_life`
+    is how many games back a game's weight halves (3 = a game 3 games ago counts
+    half as much as the latest). Returns None for an empty list.
+    """
+    if not values:
+        return None
+    n = len(values)
+    weights = [0.5 ** ((n - 1 - i) / half_life) for i in range(n)]
+    total = sum(weights)
+    return sum(v * w for v, w in zip(values, weights)) / total
+
+
+def generate_projection(player_name: str, market_key: str, sport_key: str,
+                        min_games: int = 3) -> dict:
+    """Produce PropJunkie's own projection for a player's stat.
+
+    Returns a dict with the projection plus context so the UI can be honest
+    about confidence:
+        projection:      the projected value (None if not enough data)
+        games_used:      how many recent games fed the projection
+        recent_values:   those game values (oldest → newest)
+        low_confidence:  True if the sample is thin
+        reason:          why there's no projection, if applicable
+    """
+    values = fetch_recent_stat_values(player_name, market_key, sport_key, limit=10)
+    if len(values) < min_games:
+        return {
+            "projection": None,
+            "games_used": len(values),
+            "recent_values": values,
+            "low_confidence": True,
+            "reason": "Not enough recent games to project this stat yet.",
+        }
+    proj = weighted_projection(values)
+    return {
+        "projection": round(proj, 1),
+        "games_used": len(values),
+        "recent_values": values,
+        "low_confidence": len(values) < 5,
+        "reason": None,
+    }
 
 
 # ─────────────────────────────────────────
