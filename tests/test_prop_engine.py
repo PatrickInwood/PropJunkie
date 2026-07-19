@@ -465,3 +465,32 @@ class TestGenerateGamePicks:
         if "h2h" in picks.get("g1", {}):
             # Market-anchored → no double-digit "edges".
             assert picks["g1"]["h2h"]["edge"] < 10
+
+
+class TestStartingPitcherAdjustment:
+    def _ratings(self):
+        # Two average-ish teams over enough games.
+        return ({"A": {"rs": 4.5, "ra": 4.5, "games": 12},
+                 "B": {"rs": 4.5, "ra": 4.5, "games": 12}}, 4.5)
+
+    def test_aces_lower_total_weak_starters_raise_it(self):
+        ratings, lg = self._ratings()
+        cfg = pe.GAME_MODEL_CONFIG["baseball_mlb"]
+        base = pe.project_game("A", "B", ratings, lg, cfg)
+        aces = pe.project_game("A", "B", ratings, lg, cfg,
+                               home_sp_era=2.5, away_sp_era=2.5, avg_sp_era=4.2)
+        weak = pe.project_game("A", "B", ratings, lg, cfg,
+                               home_sp_era=6.0, away_sp_era=6.0, avg_sp_era=4.2)
+        assert aces["proj_total"] < base["proj_total"] < weak["proj_total"]
+
+    def test_no_avg_era_means_no_adjustment(self):
+        ratings, lg = self._ratings()
+        cfg = pe.GAME_MODEL_CONFIG["baseball_mlb"]
+        base = pe.project_game("A", "B", ratings, lg, cfg)
+        # Without avg_sp_era the pitcher inputs are ignored.
+        same = pe.project_game("A", "B", ratings, lg, cfg,
+                               home_sp_era=2.5, away_sp_era=2.5, avg_sp_era=None)
+        assert same["proj_total"] == pytest.approx(base["proj_total"])
+
+    def test_probable_pitchers_non_mlb_is_empty(self):
+        assert pe.fetch_probable_pitchers("basketball_nba") == ({}, None)

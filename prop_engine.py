@@ -1361,7 +1361,7 @@ GAME_MODEL_CONFIG = {
     #   pitcher) — suppress the pick. total_edge_cap: max believable total edge.
     "baseball_mlb":         {"lookback_days": 18, "home_adv": 0.15, "pyth_exp": 1.83, "regress_games": 5,
                              "min_games": 5, "total_threshold": 0.5, "ml_threshold": 0.03, "unit": "runs",
-                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5},
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5, "sp_weight": 0.55},
     "basketball_nba":       {"lookback_days": 24, "home_adv": 2.5,  "pyth_exp": 13.9, "regress_games": 4,
                              "min_games": 5, "total_threshold": 3.0, "ml_threshold": 0.03, "unit": "pts",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 14},
@@ -1449,9 +1449,16 @@ def compute_team_ratings(results: list) -> tuple:
     return ratings, lg_avg
 
 
-def project_game(home: str, away: str, ratings: dict, lg_avg: float, cfg: dict):
+def project_game(home: str, away: str, ratings: dict, lg_avg: float, cfg: dict,
+                 home_sp_era: float = None, away_sp_era: float = None,
+                 avg_sp_era: float = None):
     """Project a single game's total and home win probability. None if either
-    team lacks enough recent games."""
+    team lacks enough recent games.
+
+    For MLB, the opposing starting pitcher (home_sp_era / away_sp_era, relative
+    to the slate's average starter avg_sp_era) is blended into each team's run
+    prevention — the single biggest factor a team-form model otherwise misses.
+    """
     rh = ratings.get(home)
     ra = ratings.get(away)
     if not rh or not ra or lg_avg <= 0:
@@ -1471,6 +1478,16 @@ def project_game(home: str, away: str, ratings: dict, lg_avg: float, cfg: dict):
     home_ra = _shrink(rh["ra"], rh["games"])
     away_rs = _shrink(ra["rs"], ra["games"])
     away_ra = _shrink(ra["ra"], ra["games"])
+
+    # Blend the opposing starter into each team's run prevention. A starter's ERA
+    # relative to the average starter (centered at 1.0) scales league-average runs;
+    # the rest of the game (bullpen/defense) stays the team rate. w = starter share.
+    w = cfg.get("sp_weight", 0)
+    if w and avg_sp_era and avg_sp_era > 0:
+        if away_sp_era:   # home team faces the away starter
+            away_ra = w * (away_sp_era / avg_sp_era) * lg_avg + (1 - w) * away_ra
+        if home_sp_era:   # away team faces the home starter
+            home_ra = w * (home_sp_era / avg_sp_era) * lg_avg + (1 - w) * home_ra
 
     # Each team's expected score = its offense scaled by the opponent's defense,
     # relative to league average (a log5-style matchup adjustment).
@@ -1494,6 +1511,89 @@ def project_game(home: str, away: str, ratings: dict, lg_avg: float, cfg: dict):
     }
 
 
+MLB_SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
+MLB_PEOPLE_URL   = "https://statsapi.mlb.com/api/v1/people"
+
+
+def _norm_team(name: str) -> str:
+    """Normalize a team name for matching across ESPN and MLB Stats API."""
+    return (name or "").lower().replace(".", "").strip()
+
+
+def fetch_probable_pitchers(sport_key: str) -> tuple:
+    """Probable starting pitchers + ERAs for MLB's next few days (free statsapi).
+
+    Returns (matchup_map, avg_starter_era) where matchup_map is keyed by
+    (norm(away_team), norm(home_team)) → {home_sp_era, away_sp_era, names...}.
+    avg_starter_era is the mean ERA across the fetched starters — the baseline
+    the model normalizes each pitcher against. ({}, None) for non-MLB or failure.
+    """
+    if sport_key != "baseball_mlb":
+        return {}, None
+    try:
+        matchups = {}   # (away, home) → {ids + names}
+        pids = set()
+        for i in range(0, 3):
+            day = (date.today() + timedelta(days=i)).strftime("%Y-%m-%d")
+            r = requests.get(MLB_SCHEDULE_URL,
+                             params={"sportId": 1, "date": day, "hydrate": "probablePitcher"},
+                             headers=ESPN_HDR, timeout=8)
+            if r.status_code != 200:
+                continue
+            for block in r.json().get("dates", []):
+                for g in block.get("games", []):
+                    teams = g.get("teams", {})
+                    home = teams.get("home", {}); away = teams.get("away", {})
+                    hname = home.get("team", {}).get("name")
+                    aname = away.get("team", {}).get("name")
+                    if not hname or not aname:
+                        continue
+                    hp = (home.get("probablePitcher") or {})
+                    ap = (away.get("probablePitcher") or {})
+                    key = (_norm_team(aname), _norm_team(hname))
+                    matchups.setdefault(key, {
+                        "home_sp_id":   hp.get("id"),
+                        "away_sp_id":   ap.get("id"),
+                        "home_sp_name": hp.get("fullName"),
+                        "away_sp_name": ap.get("fullName"),
+                    })
+                    if hp.get("id"): pids.add(hp["id"])
+                    if ap.get("id"): pids.add(ap["id"])
+
+        if not pids:
+            return {}, None
+
+        # One batched call for every starter's season ERA.
+        eras = {}
+        r = requests.get(MLB_PEOPLE_URL, params={
+            "personIds": ",".join(str(p) for p in pids),
+            "hydrate": f"stats(group=[pitching],type=[season],season={date.today().year})",
+        }, headers=ESPN_HDR, timeout=10)
+        if r.status_code == 200:
+            for p in r.json().get("people", []):
+                era = None
+                for s in p.get("stats", []):
+                    for split in s.get("splits", []):
+                        try:
+                            era = float(split.get("stat", {}).get("era"))
+                        except (TypeError, ValueError):
+                            pass
+                if era is not None:
+                    eras[p.get("id")] = era
+
+        if not eras:
+            return {}, None
+        avg_era = sum(eras.values()) / len(eras)
+
+        # Attach ERAs to each matchup.
+        for key, m in matchups.items():
+            m["home_sp_era"] = eras.get(m.get("home_sp_id"))
+            m["away_sp_era"] = eras.get(m.get("away_sp_id"))
+        return matchups, avg_era
+    except requests.exceptions.RequestException:
+        return {}, None
+
+
 def generate_game_picks(sport_key: str) -> dict:
     """Value picks for today's slate, keyed by game id.
 
@@ -1513,9 +1613,18 @@ def generate_game_picks(sport_key: str) -> dict:
     if not ratings:
         return {}
 
+    # Starting pitchers (MLB) — the model's biggest single-game input.
+    sp_map, avg_sp_era = ({}, None)
+    if cfg.get("sp_weight"):
+        sp_map, avg_sp_era = fetch_probable_pitchers(sport_key)
+
     picks = {}
     for g in games:
-        proj = project_game(g["home_team"], g["away_team"], ratings, lg_avg, cfg)
+        sp = sp_map.get((_norm_team(g["away_team"]), _norm_team(g["home_team"])), {})
+        proj = project_game(g["home_team"], g["away_team"], ratings, lg_avg, cfg,
+                            home_sp_era=sp.get("home_sp_era"),
+                            away_sp_era=sp.get("away_sp_era"),
+                            avg_sp_era=avg_sp_era)
         if not proj:
             continue
         entry = {}
@@ -1569,6 +1678,11 @@ def generate_game_picks(sport_key: str) -> dict:
             mg = proj["min_games"]
             entry["min_games"] = mg
             entry["confidence"] = "high" if mg >= 10 else "medium" if mg >= 7 else "low"
+            if sp.get("home_sp_name") and sp.get("away_sp_name"):
+                entry["pitchers"] = {
+                    "home":     sp["home_sp_name"], "home_era": sp.get("home_sp_era"),
+                    "away":     sp["away_sp_name"], "away_era": sp.get("away_sp_era"),
+                }
             picks[g["id"]] = entry
 
     return picks
