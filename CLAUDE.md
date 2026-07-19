@@ -11,6 +11,7 @@ PropJunkie generates and serves sports player-prop analysis (NBA, NFL, MLB, and 
 ## Project layout
 
 - `prop_engine.py` — core logic: the math/model that produces prop projections and edges.
+  - **Data sources are 100% free (no paid APIs).** Player game logs, live scores, and game odds (moneyline/spread/total) all come from ESPN's free, keyless, unquota'd APIs (`site.api.espn.com` scoreboard + game logs; MLB player stats via `statsapi.mlb.com`). The Odds API (`get_game_lines_oddsapi`, `get_event_props`) is **dormant** — its free tier is only 500 requests/month and was exhausting; revive it only as a paid "compare multiple books" upgrade once the product earns.
 - `propjunkie_server.py` — the Flask web server that serves pages and calls the engine.
 - `templates/` — HTML pages rendered by the server (landing, app, lines, slate, privacy, terms, plus auth pages). `slate.html` is the Daily Slate: today's games in Moneyline / Spread / Total tabs, built on the free game-odds endpoint (market tabs switch client-side to avoid extra API calls).
 - `static/` — front-end assets (currently `favicon.svg`).

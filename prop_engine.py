@@ -194,10 +194,133 @@ def get_game_scores(sport_key: str, days_from: int = 1) -> list:
         return []
 
 
+def _odds_phase(side: dict, field: str):
+    """Read a value from an ESPN odds side (home/away/over/under).
+
+    ESPN nests the number under a phase — 'close' (current pre-game line),
+    falling back to 'open'/'current'. Returns None if absent.
+    """
+    if not isinstance(side, dict):
+        return None
+    for phase in ("close", "current", "open"):
+        block = side.get(phase)
+        if isinstance(block, dict) and block.get(field) is not None:
+            return block[field]
+    return None
+
+
+def _american(s):
+    """'+101' / '-121' → 101 / -121. None on failure."""
+    try:
+        return int(str(s).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _spread_line(s):
+    """'+1.5' / '-1.5' / 'o7.5' / 'u7.5' → signed float. None on failure."""
+    if s is None:
+        return None
+    try:
+        return float(str(s).strip().lstrip("ouOU").strip())
+    except (ValueError, TypeError):
+        return None
+
+
 def get_game_lines(sport_key: str) -> list:
     """
-    Pull moneyline (h2h), spreads, and totals for upcoming games.
-    Returns a clean list of games with odds from the best available book.
+    Moneyline (h2h), spreads, and totals for today's + the next 2 days' games,
+    from ESPN's free scoreboard API (DraftKings line). No API key, no quota.
+
+    Returns the same shape as the Odds API path so the front end is unchanged:
+    each game has h2h / spreads / totals (or None), plus source_book. Games
+    without a posted line are still listed (schedule) with null markets.
+    """
+    sport_info = ESPN_SPORT_MAP.get(sport_key)
+    if not sport_info:
+        return []
+    sport, league = sport_info
+    url = ESPN_SCOREBOARD.format(sport=sport, league=league)
+
+    # Today + next 2 days (ESPN posts odds ~24–36h out). ESPN is free, so
+    # multiple date fetches cost nothing.
+    date_params = [None] + [(date.today() + timedelta(days=i)).strftime("%Y%m%d")
+                            for i in range(1, 3)]
+
+    results, seen = [], set()
+    try:
+        for dp in date_params:
+            resp = requests.get(url, params=({"dates": dp} if dp else {}),
+                                headers=ESPN_HDR, timeout=8)
+            if resp.status_code != 200:
+                continue
+            for ev in resp.json().get("events", []):
+                eid = ev.get("id")
+                if eid in seen:
+                    continue
+                seen.add(eid)
+                comp = (ev.get("competitions") or [{}])[0]
+                competitors = comp.get("competitors", [])
+                home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not home or not away:
+                    continue
+
+                game = {
+                    "id":            eid,
+                    "sport":         sport_key,
+                    "home_team":     home.get("team", {}).get("displayName"),
+                    "away_team":     away.get("team", {}).get("displayName"),
+                    "commence_time": ev.get("date"),
+                    "h2h":           None,
+                    "spreads":       None,
+                    "totals":        None,
+                    "source_book":   None,
+                }
+
+                odds_list = comp.get("odds") or []
+                o = odds_list[0] if odds_list else None
+                if o:
+                    game["source_book"] = (o.get("provider") or {}).get("name")
+
+                    ml = o.get("moneyline") or {}
+                    mh = _american(_odds_phase(ml.get("home"), "odds"))
+                    ma = _american(_odds_phase(ml.get("away"), "odds"))
+                    if mh is not None and ma is not None:
+                        game["h2h"] = {"home": mh, "away": ma}
+
+                    ps = o.get("pointSpread") or {}
+                    hl = _spread_line(_odds_phase(ps.get("home"), "line"))
+                    al = _spread_line(_odds_phase(ps.get("away"), "line"))
+                    if hl is not None and al is not None:
+                        game["spreads"] = {
+                            "home_line": hl, "home_odds": _american(_odds_phase(ps.get("home"), "odds")),
+                            "away_line": al, "away_odds": _american(_odds_phase(ps.get("away"), "odds")),
+                        }
+
+                    tot = o.get("total") or {}
+                    over_odds  = _american(_odds_phase(tot.get("over"), "odds"))
+                    under_odds = _american(_odds_phase(tot.get("under"), "odds"))
+                    line = _spread_line(_odds_phase(tot.get("over"), "line"))
+                    if line is None:
+                        line = o.get("overUnder")
+                    if line is not None and over_odds is not None and under_odds is not None:
+                        game["totals"] = {"line": line, "over_odds": over_odds, "under_odds": under_odds}
+
+                results.append(game)
+        return results
+    except requests.exceptions.RequestException as e:
+        print(f"[PropJunkie] ESPN lines error for {sport_key}: {e}")
+        return []
+
+
+def get_game_lines_oddsapi(sport_key: str) -> list:
+    """
+    Pull moneyline (h2h), spreads, and totals from The Odds API (multi-book).
+
+    DORMANT: PropJunkie runs on ESPN's free odds by default (see get_game_lines).
+    This path costs Odds API quota but compares many books — revive it as a paid
+    "best line across books" upgrade once the product earns revenue.
     """
     url = f"{ODDS_API_BASE}/sports/{sport_key}/odds"
     params = {

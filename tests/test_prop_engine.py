@@ -329,3 +329,56 @@ class TestGetGameScores:
             raise pe.requests.exceptions.RequestException("down")
         monkeypatch.setattr(pe.requests, "get", _boom)
         assert pe.get_game_scores("baseball_mlb") == []
+
+
+# ─────────────────────────────────────────
+# GAME LINES (ESPN scoreboard odds — free, mocked)
+# ─────────────────────────────────────────
+
+def _fake_lines_board(url, **kwargs):
+    if kwargs.get("params"):          # future-day fetches → empty
+        return _ScoreResp({"events": []})
+    return _ScoreResp({"events": [
+        {"id": "10", "date": "2026-07-20T23:00Z", "competitions": [{
+            "competitors": [
+                {"homeAway": "home", "team": {"displayName": "Cleveland Guardians"}},
+                {"homeAway": "away", "team": {"displayName": "Minnesota Twins"}},
+            ],
+            "odds": [{
+                "provider": {"name": "DraftKings"}, "overUnder": 7.5,
+                "moneyline":   {"home": {"close": {"odds": "+101"}}, "away": {"close": {"odds": "-121"}}},
+                "pointSpread": {"home": {"close": {"line": "+1.5", "odds": "-163"}},
+                                "away": {"close": {"line": "-1.5", "odds": "+135"}}},
+                "total":       {"over": {"close": {"line": "o7.5", "odds": "-108"}},
+                                "under": {"close": {"line": "u7.5", "odds": "-111"}}},
+            }],
+        }]},
+        {"id": "11", "date": "2026-07-20T20:00Z", "competitions": [{   # no odds posted
+            "competitors": [
+                {"homeAway": "home", "team": {"displayName": "Boston Red Sox"}},
+                {"homeAway": "away", "team": {"displayName": "Tampa Bay Rays"}},
+            ],
+        }]},
+    ]})
+
+
+class TestGetGameLinesESPN:
+    def test_parses_all_three_markets(self, monkeypatch):
+        monkeypatch.setattr(pe.requests, "get", _fake_lines_board)
+        games = pe.get_game_lines("baseball_mlb")
+        g = next(x for x in games if x["id"] == "10")
+        assert g["source_book"] == "DraftKings"
+        assert g["h2h"] == {"home": 101, "away": -121}
+        assert g["spreads"] == {"home_line": 1.5, "home_odds": -163,
+                                "away_line": -1.5, "away_odds": 135}
+        assert g["totals"] == {"line": 7.5, "over_odds": -108, "under_odds": -111}
+
+    def test_game_without_odds_still_listed(self, monkeypatch):
+        monkeypatch.setattr(pe.requests, "get", _fake_lines_board)
+        games = pe.get_game_lines("baseball_mlb")
+        g = next(x for x in games if x["id"] == "11")
+        assert g["h2h"] is None and g["spreads"] is None and g["totals"] is None
+        assert g["home_team"] == "Boston Red Sox"   # schedule still shown
+
+    def test_unknown_sport_returns_empty(self):
+        assert pe.get_game_lines("quidditch_pro") == []
