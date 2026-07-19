@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropJunkie — Model Record</title>
+    <meta property="og:title" content="PropJunkie — Model Record">
+    <meta property="og:description" content="PropJunkie's tracked model accuracy — every lean graded against the final score.">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0c0f0a; --surface: #141a12; --surface2: #1a2218; --border: #1e2a1a;
+            --accent: #c9a84c; --accent-hover: #dbb85c; --accent-glow: rgba(201,168,76,0.15);
+            --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
+            --text: #e8ecf4; --text-2: #b8c8b6; --muted: #4a6a44; --header-bg: rgba(12,15,10,0.95);
+        }
+        html[data-theme="light"] {
+            --bg:#f4f0e8; --surface:#ffffff; --surface2:#ede9e0; --border:#d8d2c4;
+            --accent:#a07c28; --accent-hover:#886618; --accent-glow:rgba(160,124,40,0.12);
+            --green:#166c4a; --red:#b52020; --yellow:#9a5e08;
+            --text:#1a1a14; --text-2:#4a5040; --muted:#7a7255; --header-bg:rgba(244,240,232,0.95);
+        }
+        body { background: var(--bg); color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh; transition: background .25s, color .25s; }
+
+        header { display:flex; align-items:center; justify-content:space-between;
+            padding:0 32px; height:60px; border-bottom:1px solid var(--border);
+            background:var(--header-bg); backdrop-filter:blur(12px); position:sticky; top:0; z-index:100; }
+        .logo { font-size:22px; font-weight:900; color:var(--text); letter-spacing:-.5px; text-decoration:none; }
+        .logo span { color:var(--accent); }
+        .nav-links { display:flex; align-items:center; gap:24px; }
+        .nav-link { color:var(--muted); text-decoration:none; font-size:14px; transition:color .15s; }
+        .nav-link:hover { color:var(--text); } .nav-link.active { color:var(--text); }
+        .btn-nav { background:var(--accent); color:#0c0f0a; border:none; padding:8px 18px;
+            border-radius:8px; font-size:13px; font-weight:700; text-decoration:none; }
+        html[data-theme="light"] .btn-nav { color:#fff; }
+        .theme-toggle { background:var(--surface2); border:1px solid var(--border); border-radius:22px;
+            padding:3px; display:flex; align-items:center; cursor:pointer; gap:1px; }
+        .t-opt { padding:4px 11px; border-radius:18px; font-size:10px; font-weight:700; color:var(--muted); letter-spacing:.3px; }
+        .t-opt.active { background:var(--surface); color:var(--text); }
+
+        .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+        .page-title { font-size:28px; font-weight:900; margin-bottom:6px; }
+        .page-subtitle { color:var(--muted); font-size:14px; margin-bottom:28px; }
+
+        /* Headline record */
+        .headline { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+            background:var(--surface); border:1px solid var(--border); border-radius:14px;
+            padding:24px 26px; margin-bottom:22px; }
+        .headline .wl { font-size:44px; font-weight:900; letter-spacing:-1px; }
+        .headline .pct { font-size:28px; font-weight:800; color:var(--accent); }
+        .headline .sub { color:var(--muted); font-size:13px; margin-left:auto; text-align:right; }
+
+        /* Stat grid */
+        .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:28px; }
+        .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
+        .stat-card .label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:8px; }
+        .stat-card .val { font-size:22px; font-weight:800; }
+        .stat-card .val .p { font-size:14px; color:var(--accent); font-weight:700; margin-left:6px; }
+
+        .section-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px;
+            color:var(--accent); margin:8px 0 12px; }
+
+        /* History table */
+        .history { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+        .hrow { display:grid; grid-template-columns:64px 1fr 130px 70px 64px; gap:10px; align-items:center;
+            padding:11px 16px; border-bottom:1px solid var(--border); font-size:13px; }
+        .hrow:last-child { border-bottom:none; }
+        .hrow.head { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+        .hdate { color:var(--muted); font-size:12px; }
+        .hmatch { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .hpick { color:var(--text-2); font-size:12px; }
+        .hscore { color:var(--muted); font-size:12px; }
+        .res { font-weight:800; font-size:12px; text-align:center; border-radius:6px; padding:3px 0; }
+        .res.win { color:var(--green); background:color-mix(in srgb, var(--green) 14%, transparent); }
+        .res.loss { color:var(--red); background:color-mix(in srgb, var(--red) 14%, transparent); }
+        .res.push { color:var(--muted); background:var(--surface2); }
+
+        .empty { text-align:center; padding:50px 20px; color:var(--muted); font-size:14px; line-height:1.6; }
+        .loading { text-align:center; padding:60px; color:var(--muted); }
+        .disclaimer { margin-top:22px; font-size:12px; color:var(--muted); text-align:center; line-height:1.6; }
+
+        @media (max-width:600px){
+            .hrow { grid-template-columns:52px 1fr 60px; }
+            .hrow .hpick, .hrow .hscore { display:none; }
+            header { padding:0 16px; } .nav-links { gap:14px; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <a href="/" class="logo"><span>Prop</span>Junkie</a>
+    <div class="nav-links">
+        <a href="/lines" class="nav-link">Lines</a>
+        <a href="/slate" class="nav-link">Slate</a>
+        <a href="/record" class="nav-link active">Record</a>
+        <a href="/app" class="nav-link">Prop Analyzer</a>
+        {% if current_user.is_authenticated %}
+        <a href="/account" class="nav-link">Account</a>
+        {% else %}
+        <a href="/login" class="nav-link">Log In</a>
+        <a href="/signup" class="nav-link">Sign Up</a>
+        {% endif %}
+        <div class="theme-toggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
+            <div class="t-opt active" id="tDark">🌙 Dark</div>
+            <div class="t-opt" id="tLight">☀️ Light</div>
+        </div>
+        <a href="/slate" class="btn-nav">View Slate →</a>
+    </div>
+</header>
+
+<div class="container">
+    <div class="page-title">Model Record</div>
+    <div class="page-subtitle">Every ⭐ model lean, graded against the final score. No cherry-picking — wins and losses both count.</div>
+    <div id="content"><div class="loading">Loading record…</div></div>
+    <div class="disclaimer">Results are graded automatically once each game is final. PropJunkie's leans are informational, recent-form models — a lean, not a lock. For entertainment; 18+. Bet responsibly.</div>
+</div>
+
+<script>
+    const API = '';
+    function toggleTheme(){ const h=document.documentElement;
+        const n=h.getAttribute('data-theme')!=='light'?'light':'dark';
+        h.setAttribute('data-theme',n); localStorage.setItem('pj-theme',n); updT(n); }
+    function updT(t){ document.getElementById('tDark').classList.toggle('active',t==='dark');
+        document.getElementById('tLight').classList.toggle('active',t==='light'); }
+    (function(){ const s=localStorage.getItem('pj-theme')||'dark';
+        document.documentElement.setAttribute('data-theme',s); updT(s); })();
+
+    function rec(r){ // "12-9-1" plus pct
+        if(!r) return '0-0';
+        const p = r.pushes ? `-${r.pushes}` : '';
+        return `${r.wins}-${r.losses}${p}`;
+    }
+    function pct(r){ return (r && r.win_pct!=null) ? `${r.win_pct}%` : '—'; }
+
+    function statCard(label, r){
+        return `<div class="stat-card"><div class="label">${label}</div>
+            <div class="val">${rec(r)}<span class="p">${pct(r)}</span></div></div>`;
+    }
+
+    async function load(){
+        const el = document.getElementById('content');
+        let d;
+        try { const res = await fetch(`${API}/record-data`); d = await res.json(); }
+        catch(e){ el.innerHTML = `<div class="empty">Couldn't load the record right now. Try refreshing.</div>`; return; }
+
+        if(!d.graded){
+            el.innerHTML = `<div class="empty">📊 <b>Tracking has started.</b><br>
+                Graded results appear here as games finish${d.pending?` — ${d.pending} leans are locked in and pending`:''}.<br>
+                Check back after tonight's slate.</div>`;
+            return;
+        }
+
+        const o = d.overall;
+        let html = `
+          <div class="headline">
+            <span class="wl">${rec(o)}</span>
+            <span class="pct">${pct(o)}</span>
+            <span class="sub">${d.graded} leans graded${d.pending?` · ${d.pending} pending`:''}</span>
+          </div>
+          <div class="stat-grid">
+            ${statCard('Last 10', d.last10)}
+            ${statCard('Moneyline', d.moneyline)}
+            ${statCard('Totals', d.total)}
+          </div>`;
+
+        const sports = Object.keys(d.by_sport || {});
+        if(sports.length){
+            html += `<div class="section-title">By Sport</div><div class="stat-grid">`;
+            for(const s of sports) html += statCard(s, d.by_sport[s]);
+            html += `</div>`;
+        }
+
+        html += `<div class="section-title">History</div><div class="history">
+            <div class="hrow head"><div>Date</div><div>Matchup</div><div>Pick</div><div>Score</div><div>Result</div></div>`;
+        for(const h of d.history){
+            html += `<div class="hrow">
+                <div class="hdate">${h.date}</div>
+                <div class="hmatch">${h.away} @ ${h.home}</div>
+                <div class="hpick">${h.pick}</div>
+                <div class="hscore">${h.score}</div>
+                <div class="res ${h.result}">${h.result.toUpperCase()}</div>
+            </div>`;
+        }
+        html += `</div>`;
+        el.innerHTML = html;
+    }
+    load();
+</script>
+</body>
+</html>

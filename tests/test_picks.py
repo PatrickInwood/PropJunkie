@@ -72,6 +72,29 @@ class TestSnapshotAndRecord:
         assert rec["moneyline"]["losses"] == 1 and rec["moneyline"]["wins"] == 0
         assert rec["overall"]["win_pct"] == 50.0
 
+    def test_record_data_has_by_sport_and_history(self, client, monkeypatch):
+        _clear_picks()
+        past = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        monkeypatch.setattr(srv, "generate_game_picks", lambda s: self._picks_payload(past))
+        srv._picks_cache.clear()
+        client.get("/game-picks/baseball_mlb")
+        monkeypatch.setattr(srv, "fetch_final_scores",
+                            lambda sp, ymd: {"g1": {"home_score": 3, "away_score": 5, "completed": True}})
+        d = client.get("/record-data").get_json()
+        assert d["graded"] == 2
+        assert "MLB" in d["by_sport"]
+        assert len(d["history"]) == 2
+        h = d["history"][0]
+        assert h["away"] == "Boston Red Sox" and h["home"] == "New York Yankees"
+        assert h["result"] in ("win", "loss", "push")
+        assert h["score"] == "5–3"
+
+    def test_record_page_renders(self, client):
+        r = client.get("/record")
+        assert r.status_code == 200
+        assert b"Model Record" in r.data
+        assert b'href="/slate"' in r.data
+
     def test_recent_games_not_yet_graded(self, client, monkeypatch):
         _clear_picks()
         # Game starts in the future → never graded even if a (bogus) final exists.

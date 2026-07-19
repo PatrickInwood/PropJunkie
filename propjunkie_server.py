@@ -147,6 +147,12 @@ def slate_page():
     return render_template('slate.html')
 
 
+@app.route('/record', methods=['GET'])
+@limiter.exempt
+def record_page():
+    return render_template('record.html')
+
+
 @app.route('/privacy', methods=['GET'])
 @limiter.exempt
 def privacy_page():
@@ -554,6 +560,52 @@ def model_record():
         "last10":    _record_from(graded[:10]),
         "moneyline": _record_from([p for p in graded if p.market == "h2h"]),
         "total":     _record_from([p for p in graded if p.market == "totals"]),
+        "graded":    len(graded),
+        "pending":   pending,
+    })
+
+
+_SPORT_LABELS = {
+    "baseball_mlb": "MLB", "basketball_nba": "NBA",
+    "americanfootball_nfl": "NFL", "icehockey_nhl": "NHL",
+}
+
+
+@app.route('/record-data', methods=['GET'])
+@limiter.limit("30 per minute")
+def record_data():
+    """Full accuracy detail for the /record page: overall, by market, by sport,
+    and a graded-pick history."""
+    _grade_pending_picks()
+    graded = (Pick.query.filter_by(graded=True)
+              .order_by(Pick.graded_at.desc()).all())
+    pending = Pick.query.filter_by(graded=False).count()
+
+    by_sport = {}
+    for sk, label in _SPORT_LABELS.items():
+        rows = [p for p in graded if p.sport == sk]
+        if rows:
+            by_sport[label] = _record_from(rows)
+
+    history = [{
+        "sport":  _SPORT_LABELS.get(p.sport, p.sport),
+        "date":   p.commence_time.strftime("%b %-d") if p.commence_time else "",
+        "away":   p.away_team,
+        "home":   p.home_team,
+        "market": "Total" if p.market == "totals" else "Moneyline",
+        "pick":   p.pick,
+        "result": p.result,
+        "score":  (f"{p.away_score}–{p.home_score}"
+                   if p.away_score is not None else ""),
+    } for p in graded[:100]]
+
+    return jsonify({
+        "overall":   _record_from(graded),
+        "last10":    _record_from(graded[:10]),
+        "moneyline": _record_from([p for p in graded if p.market == "h2h"]),
+        "total":     _record_from([p for p in graded if p.market == "totals"]),
+        "by_sport":  by_sport,
+        "history":   history,
         "graded":    len(graded),
         "pending":   pending,
     })
