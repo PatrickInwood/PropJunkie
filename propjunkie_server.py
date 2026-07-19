@@ -140,6 +140,12 @@ def lines_page():
     return render_template('lines.html')
 
 
+@app.route('/slate', methods=['GET'])
+@limiter.exempt
+def slate_page():
+    return render_template('slate.html')
+
+
 @app.route('/privacy', methods=['GET'])
 @limiter.exempt
 def privacy_page():

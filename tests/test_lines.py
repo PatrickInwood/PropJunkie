@@ -39,6 +39,21 @@ class TestScoresCache:
         assert calls["n"] == 2   # different keys → not shared
 
 
+class TestSlatePage:
+    def test_slate_renders_with_market_tabs(self, client):
+        r = client.get("/slate")
+        assert r.status_code == 200
+        # The three market tabs and the sport selector must be present.
+        for needle in (b'data-market="h2h"', b'data-market="spreads"',
+                       b'data-market="totals"', b'Daily Slate'):
+            assert needle in r.data
+
+    def test_slate_has_nav_links(self, client):
+        r = client.get("/slate")
+        assert b'href="/lines"' in r.data
+        assert b'href="/app"' in r.data
+
+
 class TestLinesCache:
     def test_repeat_requests_hit_api_once(self, client, monkeypatch):
         srv._lines_cache.clear()

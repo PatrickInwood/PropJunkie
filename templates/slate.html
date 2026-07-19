@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropJunkie — Daily Slate</title>
+    <meta property="og:title" content="PropJunkie — Daily Slate">
+    <meta property="og:description" content="Today's games across every market — moneyline, spread, and total.">
+    <meta property="og:url" content="https://propjunkie.app/slate">
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0c0f0a;
+            --surface: #141a12;
+            --surface2: #1a2218;
+            --border: #1e2a1a;
+            --accent: #c9a84c;
+            --accent-hover: #dbb85c;
+            --accent-glow: rgba(201, 168, 76, 0.15);
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --text: #e8ecf4;
+            --text-2: #b8c8b6;
+            --muted: #4a6a44;
+            --header-bg: rgba(12, 15, 10, 0.95);
+        }
+        html[data-theme="light"] {
+            --bg: #f4f0e8; --surface: #ffffff; --surface2: #ede9e0; --border: #d8d2c4;
+            --accent: #a07c28; --accent-hover: #886618; --accent-glow: rgba(160, 124, 40, 0.12);
+            --green: #166c4a; --red: #b52020; --yellow: #9a5e08;
+            --text: #1a1a14; --text-2: #4a5040; --muted: #7a7255; --header-bg: rgba(244, 240, 232, 0.95);
+        }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh; transition: background 0.25s ease, color 0.25s ease;
+        }
+
+        /* ── Header ── */
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 32px; height: 60px; border-bottom: 1px solid var(--border);
+            background: var(--header-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .logo { font-size: 22px; font-weight: 900; color: var(--text); letter-spacing: -0.5px; text-decoration: none; }
+        .logo span { color: var(--accent); }
+        .nav-links { display: flex; align-items: center; gap: 24px; }
+        .nav-link { color: var(--muted); text-decoration: none; font-size: 14px; transition: color 0.15s; }
+        .nav-link:hover { color: var(--text); }
+        .nav-link.active { color: var(--text); }
+        .btn-nav {
+            background: var(--accent); color: #0c0f0a; border: none; padding: 8px 18px;
+            border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
+            text-decoration: none; transition: background 0.15s;
+        }
+        .btn-nav:hover { background: var(--accent-hover); }
+        html[data-theme="light"] .btn-nav { color: #fff; }
+
+        /* ── Theme toggle ── */
+        .theme-toggle {
+            background: var(--surface2); border: 1px solid var(--border); border-radius: 22px;
+            padding: 3px; display: flex; align-items: center; cursor: pointer; gap: 1px;
+        }
+        .theme-toggle:hover { border-color: var(--accent); }
+        .t-opt {
+            padding: 4px 11px; border-radius: 18px; font-size: 10px; font-weight: 700;
+            color: var(--muted); letter-spacing: 0.3px; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .t-opt.active { background: var(--surface); color: var(--text); }
+
+        /* ── Layout ── */
+        .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+        .page-header { margin-bottom: 24px; }
+        .page-title { font-size: 28px; font-weight: 900; margin-bottom: 6px; }
+        .page-subtitle { color: var(--muted); font-size: 14px; }
+
+        /* ── Sport tabs ── */
+        .sport-tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+        .tab {
+            padding: 8px 20px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 700;
+            letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s;
+        }
+        .tab:hover { border-color: var(--accent); color: var(--text); }
+        .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        /* ── Market tabs (ML / Spread / Total) ── */
+        .market-tabs {
+            display: flex; gap: 4px; margin-bottom: 22px; background: var(--surface);
+            border: 1px solid var(--border); border-radius: 10px; padding: 4px; width: fit-content;
+        }
+        .mtab {
+            padding: 8px 22px; border-radius: 7px; font-size: 13px; font-weight: 700;
+            color: var(--muted); cursor: pointer; transition: all 0.15s; user-select: none;
+        }
+        .mtab:hover { color: var(--text); }
+        .mtab.active { background: var(--accent); color: #fff; }
+
+        /* ── Date groups ── */
+        .date-group { margin-bottom: 26px; }
+        .date-label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--accent); margin-bottom: 10px; padding-left: 4px;
+        }
+
+        /* ── Slate cards ── */
+        .slate-card {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+            margin-bottom: 10px; display: grid; grid-template-columns: 1fr 230px;
+            gap: 16px; align-items: center; padding: 16px 20px; transition: border-color 0.15s;
+        }
+        .slate-card:hover { border-color: var(--accent); }
+        .matchup-text { font-size: 15px; font-weight: 700; }
+        .matchup-at { color: var(--muted); font-weight: 500; margin: 0 4px; }
+        .game-time { font-size: 12px; color: var(--muted); margin-top: 4px; }
+        .book-tag { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+        .pick-col { display: flex; flex-direction: column; gap: 6px; }
+        .pick-row {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--surface2); border-radius: 7px; padding: 8px 12px;
+        }
+        .pick-side { font-size: 12px; font-weight: 600; color: var(--text-2); }
+        .pick-line { font-size: 11px; color: var(--muted); margin-left: 5px; }
+        .pick-odds { font-size: 14px; font-weight: 800; }
+        .odds-pos { color: var(--green); }
+        .odds-neg { color: var(--text); }
+        .odds-even { color: var(--yellow); }
+        .pick-na { font-size: 12px; color: var(--muted); text-align: center; padding: 8px; }
+
+        /* ── Loading / empty ── */
+        .loading-state, .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+        .spinner {
+            width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .note-bar {
+            margin-top: 8px; font-size: 12px; color: var(--muted); text-align: center;
+            border-top: 1px dashed var(--border); padding-top: 14px;
+        }
+
+        @media (max-width: 620px) {
+            .slate-card { grid-template-columns: 1fr; gap: 12px; }
+            header { padding: 0 16px; }
+            .nav-links { gap: 14px; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <a href="/" class="logo"><span>Prop</span>Junkie</a>
+    <div class="nav-links">
+        <a href="/lines" class="nav-link">Lines</a>
+        <a href="/slate" class="nav-link active">Slate</a>
+        <a href="/app" class="nav-link">Prop Analyzer</a>
+        {% if current_user.is_authenticated %}
+        <a href="/account" class="nav-link">Account</a>
+        {% else %}
+        <a href="/login" class="nav-link">Log In</a>
+        <a href="/signup" class="nav-link">Sign Up</a>
+        {% endif %}
+        <div class="theme-toggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
+            <div class="t-opt active" id="tDark">🌙 Dark</div>
+            <div class="t-opt" id="tLight">☀️ Light</div>
+        </div>
+        <a href="/app" class="btn-nav">Analyze Props →</a>
+    </div>
+</header>
+
+<div class="container">
+    <div class="page-header">
+        <div class="page-title">Daily Slate</div>
+        <div class="page-subtitle">Today's games across every market — moneyline, spread, and total.</div>
+    </div>
+
+    <div class="sport-tabs">
+        <div class="tab active" data-sport="baseball_mlb">⚾ MLB</div>
+        <div class="tab" data-sport="basketball_nba">🏀 NBA</div>
+        <div class="tab" data-sport="americanfootball_nfl">🏈 NFL</div>
+        <div class="tab" data-sport="icehockey_nhl">🏒 NHL</div>
+    </div>
+
+    <div class="market-tabs">
+        <div class="mtab active" data-market="h2h">Moneyline</div>
+        <div class="mtab" data-market="spreads">Spread</div>
+        <div class="mtab" data-market="totals">Total</div>
+    </div>
+
+    <div id="slateContainer">
+        <div class="loading-state"><div class="spinner"></div>Loading slate…</div>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    let selectedSport  = 'baseball_mlb';
+    let selectedMarket = 'h2h';
+    let cachedGames    = [];   // last fetched games — market tabs re-render from this (no refetch)
+
+    // ── Theme ────────────────────────────────────────────────────────
+    function toggleTheme() {
+        const html = document.documentElement;
+        const next = html.getAttribute('data-theme') !== 'light' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('pj-theme', next);
+        updateToggleUI(next);
+    }
+    function updateToggleUI(theme) {
+        document.getElementById('tDark').classList.toggle('active', theme === 'dark');
+        document.getElementById('tLight').classList.toggle('active', theme === 'light');
+    }
+    (function initTheme() {
+        const saved = localStorage.getItem('pj-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+        updateToggleUI(saved);
+    })();
+
+    const SPORT_LABELS = {
+        baseball_mlb: 'MLB', basketball_nba: 'NBA',
+        americanfootball_nfl: 'NFL', icehockey_nhl: 'NHL',
+    };
+
+    // ── Formatting helpers ───────────────────────────────────────────
+    function formatOdds(val) {
+        if (val == null) return { text: '—', cls: 'odds-na' };
+        const n = Number(val);
+        if (n > 0) return { text: '+' + n, cls: 'odds-pos' };
+        if (n === 100 || n === -100) return { text: String(n), cls: 'odds-even' };
+        return { text: String(n), cls: 'odds-neg' };
+    }
+    function signedLine(line) {
+        if (line == null) return '';
+        return (line > 0 ? '+' : '') + line;
+    }
+    function shortName(name) {
+        const parts = name.split(' ');
+        return parts[parts.length - 1];
+    }
+    function gameTime(commence) {
+        const d = new Date(commence);
+        // Odds API stores commence_time 1 min past schedule; round to nearest 5.
+        d.setMinutes(Math.round(d.getMinutes() / 5) * 5, 0, 0);
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    function groupByDate(games) {
+        const groups = {};
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+        for (const g of games) {
+            const d = new Date(g.commence_time); d.setHours(0, 0, 0, 0);
+            let label;
+            if (d.getTime() === today.getTime()) label = 'Today';
+            else if (d.getTime() === tomorrow.getTime()) label = 'Tomorrow';
+            else label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            (groups[label] = groups[label] || []).push(g);
+        }
+        return groups;
+    }
+
+    // ── Per-market rendering ─────────────────────────────────────────
+    function marketRows(g, market) {
+        if (market === 'h2h') {
+            if (!g.h2h) return `<div class="pick-na">No moneyline posted</div>`;
+            const a = formatOdds(g.h2h.away), h = formatOdds(g.h2h.home);
+            return `
+              <div class="pick-row"><span class="pick-side">${shortName(g.away_team)}</span><span class="pick-odds ${a.cls}">${a.text}</span></div>
+              <div class="pick-row"><span class="pick-side">${shortName(g.home_team)}</span><span class="pick-odds ${h.cls}">${h.text}</span></div>`;
+        }
+        if (market === 'spreads') {
+            if (!g.spreads) return `<div class="pick-na">No spread posted</div>`;
+            const a = formatOdds(g.spreads.away_odds), h = formatOdds(g.spreads.home_odds);
+            return `
+              <div class="pick-row"><span class="pick-side">${shortName(g.away_team)}<span class="pick-line">${signedLine(g.spreads.away_line)}</span></span><span class="pick-odds ${a.cls}">${a.text}</span></div>
+              <div class="pick-row"><span class="pick-side">${shortName(g.home_team)}<span class="pick-line">${signedLine(g.spreads.home_line)}</span></span><span class="pick-odds ${h.cls}">${h.text}</span></div>`;
+        }
+        // totals
+        if (!g.totals) return `<div class="pick-na">No total posted</div>`;
+        const o = formatOdds(g.totals.over_odds), u = formatOdds(g.totals.under_odds);
+        return `
+          <div class="pick-row"><span class="pick-side">Over<span class="pick-line">${g.totals.line}</span></span><span class="pick-odds ${o.cls}">${o.text}</span></div>
+          <div class="pick-row"><span class="pick-side">Under<span class="pick-line">${g.totals.line}</span></span><span class="pick-odds ${u.cls}">${u.text}</span></div>`;
+    }
+
+    function renderCard(g) {
+        return `
+          <div class="slate-card">
+            <div class="game-info">
+              <div class="matchup-text">${g.away_team}<span class="matchup-at">@</span>${g.home_team}</div>
+              <div class="game-time">${gameTime(g.commence_time)}</div>
+              ${g.source_book ? `<div class="book-tag">${g.source_book}</div>` : ''}
+            </div>
+            <div class="pick-col">${marketRows(g, selectedMarket)}</div>
+          </div>`;
+    }
+
+    function render() {
+        const container = document.getElementById('slateContainer');
+        if (!Array.isArray(cachedGames) || cachedGames.length === 0) {
+            container.innerHTML = `<div class="empty-state">No games on the board yet for ${SPORT_LABELS[selectedSport]}.<br>Lines typically post a few hours before game time.</div>`;
+            return;
+        }
+        const groups = groupByDate(cachedGames);
+        let html = '';
+        for (const [label, games] of Object.entries(groups)) {
+            html += `<div class="date-group"><div class="date-label">${label}</div>${games.map(renderCard).join('')}</div>`;
+        }
+        html += `<div class="note-bar">Odds from the best available book · shared 15-min cache to protect our free data quota.<br>Model-driven value picks are coming next.</div>`;
+        container.innerHTML = html;
+    }
+
+    async function loadSlate(sport) {
+        const container = document.getElementById('slateContainer');
+        container.innerHTML = '<div class="loading-state"><div class="spinner"></div>Loading slate…</div>';
+        try {
+            const res = await fetch(`${API}/game-lines/${sport}`);
+            let games = await res.json();
+            // Fall back to the (free) events endpoint so we still show the schedule.
+            if (!Array.isArray(games) || games.length === 0) {
+                try {
+                    const evRes = await fetch(`${API}/events/${sport}`);
+                    const events = await evRes.json();
+                    if (Array.isArray(events) && events.length > 0) {
+                        games = events.map(e => ({
+                            id: e.id, sport, home_team: e.home_team, away_team: e.away_team,
+                            commence_time: e.commence_time, h2h: null, spreads: null, totals: null,
+                            source_book: 'Lines pending',
+                        }));
+                    } else { games = []; }
+                } catch { games = []; }
+            }
+            cachedGames = Array.isArray(games) ? games : [];
+            render();
+        } catch (e) {
+            container.innerHTML = `<div class="empty-state">Could not load the slate right now. Try refreshing.</div>`;
+        }
+    }
+
+    // ── Tab wiring ───────────────────────────────────────────────────
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            selectedSport = tab.dataset.sport;
+            loadSlate(selectedSport);           // sport change → refetch
+        });
+    });
+    document.querySelectorAll('.mtab').forEach(mtab => {
+        mtab.addEventListener('click', () => {
+            document.querySelectorAll('.mtab').forEach(t => t.classList.remove('active'));
+            mtab.classList.add('active');
+            selectedMarket = mtab.dataset.market;
+            render();                            // market change → re-render only (no API call)
+        });
+    });
+
+    loadSlate(selectedSport);
+</script>
+</body>
+</html>

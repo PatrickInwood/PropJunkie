@@ -12,7 +12,7 @@ PropJunkie generates and serves sports player-prop analysis (NBA, NFL, MLB, and 
 
 - `prop_engine.py` — core logic: the math/model that produces prop projections and edges.
 - `propjunkie_server.py` — the Flask web server that serves pages and calls the engine.
-- `templates/` — HTML pages rendered by the server (landing, app, lines, privacy, terms).
+- `templates/` — HTML pages rendered by the server (landing, app, lines, slate, privacy, terms, plus auth pages). `slate.html` is the Daily Slate: today's games in Moneyline / Spread / Total tabs, built on the free game-odds endpoint (market tabs switch client-side to avoid extra API calls).
 - `static/` — front-end assets (currently `favicon.svg`).
 - `tests/` — automated tests (`test_prop_engine.py`).
 - `conftest.py` — at the project root; puts the repo root on Python's import path so the tests can find `prop_engine`. (Shared fixtures would also go here if we add any.)
