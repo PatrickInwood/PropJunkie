@@ -227,6 +227,42 @@ def _spread_line(s):
         return None
 
 
+def fetch_final_scores(sport_key: str, yyyymmdd: str) -> dict:
+    """Final scores for one date, keyed by ESPN event id (used to grade picks).
+
+    {event_id: {'home_score', 'away_score', 'completed'}}. {} on failure.
+    Since our game ids ARE ESPN event ids, picks grade by exact id lookup.
+    """
+    sport_info = ESPN_SPORT_MAP.get(sport_key)
+    if not sport_info:
+        return {}
+    sport, league = sport_info
+    url = ESPN_SCOREBOARD.format(sport=sport, league=league)
+    out = {}
+    try:
+        r = requests.get(url, params={"dates": yyyymmdd}, headers=ESPN_HDR, timeout=8)
+        if r.status_code != 200:
+            return {}
+        for ev in r.json().get("events", []):
+            state = ev.get("status", {}).get("type", {}).get("state")
+            comp = (ev.get("competitions") or [{}])[0]
+            competitors = comp.get("competitors", [])
+            home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+            away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+            if not home or not away:
+                continue
+            try:
+                hs = int(home.get("score"))
+                as_ = int(away.get("score"))
+            except (TypeError, ValueError):
+                continue
+            out[ev.get("id")] = {"home_score": hs, "away_score": as_,
+                                 "completed": state == "post"}
+        return out
+    except requests.exceptions.RequestException:
+        return {}
+
+
 def get_game_lines(sport_key: str) -> list:
     """
     Moneyline (h2h), spreads, and totals for today's + the next 2 days' games,
@@ -1640,6 +1676,7 @@ def generate_game_picks(sport_key: str) -> dict:
                 side = "Over" if diff > 0 else "Under"
                 entry["totals"] = {
                     "pick":  f"{side} {line}",
+                    "side":  side.lower(),
                     "model": round(proj["proj_total"], 1),
                     "line":  line,
                     "edge":  round(abs(diff), 1),
@@ -1662,6 +1699,7 @@ def generate_game_picks(sport_key: str) -> dict:
                 if home_edge >= cfg["ml_threshold"] and home_edge >= away_edge:
                     entry["h2h"] = {
                         "pick":        f"{g['home_team'].split()[-1]} ML",
+                        "side":        "home",
                         "model_prob":  round(blended_home, 3),
                         "market_prob": round(mkt_home, 3),
                         "edge":        round(home_edge * 100, 1),
@@ -1669,6 +1707,7 @@ def generate_game_picks(sport_key: str) -> dict:
                 elif away_edge >= cfg["ml_threshold"]:
                     entry["h2h"] = {
                         "pick":        f"{g['away_team'].split()[-1]} ML",
+                        "side":        "away",
                         "model_prob":  round(1 - blended_home, 3),
                         "market_prob": round(mkt_away, 3),
                         "edge":        round(away_edge * 100, 1),
@@ -1678,6 +1717,10 @@ def generate_game_picks(sport_key: str) -> dict:
             mg = proj["min_games"]
             entry["min_games"] = mg
             entry["confidence"] = "high" if mg >= 10 else "medium" if mg >= 7 else "low"
+            # Game metadata so the pick is self-contained (used for accuracy tracking).
+            entry["home"]     = g["home_team"]
+            entry["away"]     = g["away_team"]
+            entry["commence"] = g["commence_time"]
             if sp.get("home_sp_name") and sp.get("away_sp_name"):
                 entry["pitchers"] = {
                     "home":     sp["home_sp_name"], "home_era": sp.get("home_sp_era"),

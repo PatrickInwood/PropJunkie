@@ -82,6 +82,15 @@
         .page-title { font-size: 28px; font-weight: 900; margin-bottom: 6px; }
         .page-subtitle { color: var(--muted); font-size: 14px; }
 
+        /* ── Model record banner ── */
+        .record-banner {
+            font-size: 13px; color: var(--text-2); background: var(--surface);
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 10px 14px; margin-bottom: 18px;
+        }
+        .record-banner b { color: var(--text); }
+        .rec-pct { color: var(--accent); font-weight: 800; }
+
         /* ── Sport tabs ── */
         .sport-tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
         .tab {
@@ -197,6 +206,8 @@
         <div class="page-title">Daily Slate</div>
         <div class="page-subtitle">Today's games across every market — with ⭐ PropJunkie model leans on moneyline &amp; total.</div>
     </div>
+
+    <div id="recordBanner" class="record-banner" style="display:none"></div>
 
     <div class="sport-tabs">
         <div class="tab active" data-sport="baseball_mlb">⚾ MLB</div>
@@ -412,6 +423,27 @@
         });
     });
 
+    // ── Model accuracy record (all sports) ───────────────────────────
+    async function loadRecord() {
+        try {
+            const r = await fetch(`${API}/model-record`);
+            if (!r.ok) return;
+            const d = await r.json();
+            const el = document.getElementById('recordBanner');
+            if (!d.graded) {
+                el.innerHTML = `📊 <b>Model record</b> — tracking just started; graded results post after games finish${d.pending ? ` (${d.pending} leans pending)` : ''}.`;
+            } else {
+                const o = d.overall, l = d.last10;
+                const pct = o.win_pct != null ? ` · <span class="rec-pct">${o.win_pct}%</span>` : '';
+                el.innerHTML = `📊 <b>Model record</b> — ${o.wins}-${o.losses}${o.pushes ? `-${o.pushes}` : ''}${pct}`
+                    + ` · last 10: ${l.wins}-${l.losses}`
+                    + ` · ML ${d.moneyline.wins}-${d.moneyline.losses} · Totals ${d.total.wins}-${d.total.losses}`;
+            }
+            el.style.display = 'block';
+        } catch (e) { /* record is optional */ }
+    }
+
+    loadRecord();
     loadSlate(selectedSport);
 </script>
 </body>

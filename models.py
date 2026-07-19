@@ -136,3 +136,65 @@ class User(UserMixin, db.Model):
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"
+
+
+class Pick(db.Model):
+    """A model 'lean' PropJunkie published, recorded so we can grade our accuracy.
+
+    One row per (game, market). We snapshot the lean when it's first flagged and
+    freeze it, then fill in the result once the game finishes — that's how the
+    Slate can honestly show a hit-rate instead of just claiming one.
+    """
+
+    __tablename__ = "picks"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # What game / market this lean is on. game_id is the ESPN event id, which is
+    # also what our lines use — so grading is an exact id lookup.
+    game_id = db.Column(db.String(64), nullable=False, index=True)
+    sport = db.Column(db.String(40), nullable=False, index=True)
+    market = db.Column(db.String(16), nullable=False)   # 'h2h' | 'totals'
+    commence_time = db.Column(db.DateTime(timezone=True))
+    home_team = db.Column(db.String(80))
+    away_team = db.Column(db.String(80))
+
+    # The lean itself, frozen at first flag.
+    pick = db.Column(db.String(80))          # human label, e.g. "Under 9.0"
+    side = db.Column(db.String(8))           # 'over'|'under'|'home'|'away' (for grading)
+    line = db.Column(db.Float)               # totals line (null for moneyline)
+    model_value = db.Column(db.Float)        # projected total, or model win prob
+    edge = db.Column(db.Float)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    # Result, filled in once the game is final.
+    graded = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    result = db.Column(db.String(8))         # 'win' | 'loss' | 'push'
+    home_score = db.Column(db.Integer)
+    away_score = db.Column(db.Integer)
+    graded_at = db.Column(db.DateTime(timezone=True))
+
+    # One lean per game+market — snapshotting is idempotent.
+    __table_args__ = (
+        db.UniqueConstraint("game_id", "market", name="uix_pick_game_market"),
+    )
+
+    def grade(self, home_score: int, away_score: int) -> str:
+        """Return 'win' / 'loss' / 'push' for this lean given the final score."""
+        if self.market == "totals":
+            total = home_score + away_score
+            if self.line is not None and total == self.line:
+                return "push"
+            went_over = total > (self.line or 0)
+            won = went_over if self.side == "over" else not went_over
+        else:  # h2h — no ties in the sports we cover
+            home_won = home_score > away_score
+            won = home_won if self.side == "home" else not home_won
+        return "win" if won else "loss"
+
+    def __repr__(self) -> str:
+        return f"<Pick {self.sport} {self.market} {self.pick} result={self.result}>"

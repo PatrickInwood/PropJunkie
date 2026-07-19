@@ -25,6 +25,7 @@ import os
 import time
 import logging
 import threading
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_cors import CORS
@@ -33,8 +34,8 @@ from flask_limiter.util import get_remote_address
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks
-from models import db, User
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks, fetch_final_scores
+from models import db, User, Pick
 from forms import (
     SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
 )
@@ -441,10 +442,121 @@ def game_picks(sport):
     try:
         data = generate_game_picks(sport)
         _picks_cache[sport] = {'data': data, 'ts': now}
+        _snapshot_picks(sport, data)   # freeze new leans for accuracy tracking
         return jsonify(data)
     except Exception:
         logger.exception("Error generating game picks for %s", sport)
         return jsonify({'error': _GENERIC_ERROR}), 500
+
+
+def _parse_commence(iso: str):
+    """Parse an ESPN commence-time string (e.g. '2026-07-20T23:05Z') to datetime."""
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _snapshot_picks(sport, picks):
+    """Freeze each newly-flagged lean into the DB (idempotent by game+market).
+
+    Never raise — accuracy tracking must not break the picks endpoint.
+    """
+    try:
+        added = False
+        for gid, e in (picks or {}).items():
+            for market in ("totals", "h2h"):
+                m = e.get(market)
+                if not m:
+                    continue
+                if Pick.query.filter_by(game_id=gid, market=market).first():
+                    continue
+                db.session.add(Pick(
+                    game_id=gid, sport=sport, market=market,
+                    commence_time=_parse_commence(e.get("commence")),
+                    home_team=e.get("home"), away_team=e.get("away"),
+                    pick=m.get("pick"), side=m.get("side"), line=m.get("line"),
+                    model_value=(m.get("model") if market == "totals" else m.get("model_prob")),
+                    edge=m.get("edge"),
+                ))
+                added = True
+        if added:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Error snapshotting picks for %s", sport)
+
+
+def _grade_pending_picks(sport=None):
+    """Grade any ungraded picks whose games have finished. Never raises."""
+    try:
+        q = Pick.query.filter_by(graded=False)
+        if sport:
+            q = q.filter_by(sport=sport)
+        pending = q.all()
+        if not pending:
+            return
+
+        now = datetime.now(timezone.utc)
+        by_date = {}   # (sport, YYYYMMDD) → [picks]
+        for p in pending:
+            ct = p.commence_time
+            if ct is None:
+                continue
+            if ct.tzinfo is None:
+                ct = ct.replace(tzinfo=timezone.utc)
+            # Give the game time to finish before looking for a final.
+            if (now - ct).total_seconds() < 4 * 3600:
+                continue
+            by_date.setdefault((p.sport, ct.strftime("%Y%m%d")), []).append(p)
+
+        changed = False
+        for (sp, ymd), plist in by_date.items():
+            finals = fetch_final_scores(sp, ymd)
+            for p in plist:
+                f = finals.get(p.game_id)
+                if not f or not f.get("completed"):
+                    continue
+                p.home_score = f["home_score"]
+                p.away_score = f["away_score"]
+                p.result = p.grade(f["home_score"], f["away_score"])
+                p.graded = True
+                p.graded_at = now
+                changed = True
+        if changed:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Error grading pending picks")
+
+
+def _record_from(picks):
+    w = sum(1 for p in picks if p.result == "win")
+    l = sum(1 for p in picks if p.result == "loss")
+    push = sum(1 for p in picks if p.result == "push")
+    decided = w + l
+    return {"wins": w, "losses": l, "pushes": push,
+            "win_pct": round(100 * w / decided, 1) if decided else None}
+
+
+@app.route('/model-record', methods=['GET'])
+@limiter.limit("30 per minute")
+def model_record():
+    """PropJunkie's graded accuracy: overall, last 10, and by market."""
+    _grade_pending_picks()
+    graded = (Pick.query.filter_by(graded=True)
+              .order_by(Pick.graded_at.desc()).all())
+    pending = Pick.query.filter_by(graded=False).count()
+    return jsonify({
+        "overall":   _record_from(graded),
+        "last10":    _record_from(graded[:10]),
+        "moneyline": _record_from([p for p in graded if p.market == "h2h"]),
+        "total":     _record_from([p for p in graded if p.market == "totals"]),
+        "graded":    len(graded),
+        "pending":   pending,
+    })
 
 
 # ─────────────────────────────────────────
