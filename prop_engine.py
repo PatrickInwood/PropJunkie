@@ -23,7 +23,8 @@ import os
 import re
 import json
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 import requests
 from scipy import stats
 import anthropic
@@ -119,6 +120,19 @@ def get_events(sport_key: str) -> list:
 
 ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard"
 
+# US sports run on a US schedule, so anchor "today" to US Eastern — not the
+# server's clock (Railway runs in UTC, which rolls to tomorrow late US-evening).
+# ESPN's default (no-date) scoreboard also lags to yesterday in the morning, so
+# we always pass explicit dates instead of relying on the default.
+ESPN_TZ = ZoneInfo("America/New_York")
+
+
+def _espn_dates(days_forward: int = 2, days_back: int = 0) -> list:
+    """Explicit YYYYMMDD date strings around US-Eastern 'today' (oldest → newest)."""
+    today = datetime.now(ESPN_TZ).date()
+    return [(today + timedelta(days=i)).strftime("%Y%m%d")
+            for i in range(-days_back, days_forward + 1)]
+
 
 def get_game_scores(sport_key: str, days_from: int = 1) -> list:
     """
@@ -146,15 +160,14 @@ def get_game_scores(sport_key: str, days_from: int = 1) -> list:
     sport, league = sport_info
     url = ESPN_SCOREBOARD.format(sport=sport, league=league)
 
-    # Today's board (no date param) covers live + today's finals; add prior days.
-    date_params = [None]
-    for i in range(1, min(int(days_from), 3) + 1):
-        date_params.append((date.today() - timedelta(days=i)).strftime("%Y%m%d"))
+    # Explicit US-Eastern dates: today (live + today's finals) plus prior days.
+    # (The default no-date board lags to yesterday morning-of, so we don't use it.)
+    date_params = _espn_dates(days_forward=0, days_back=min(int(days_from), 3))
 
     games, seen = [], set()
     try:
         for dp in date_params:
-            resp = requests.get(url, params=({"dates": dp} if dp else {}),
+            resp = requests.get(url, params={"dates": dp},
                                 headers=ESPN_HDR, timeout=8)
             if resp.status_code != 200:
                 continue
@@ -278,15 +291,13 @@ def get_game_lines(sport_key: str) -> list:
     sport, league = sport_info
     url = ESPN_SCOREBOARD.format(sport=sport, league=league)
 
-    # Today + next 2 days (ESPN posts odds ~24–36h out). ESPN is free, so
-    # multiple date fetches cost nothing.
-    date_params = [None] + [(date.today() + timedelta(days=i)).strftime("%Y%m%d")
-                            for i in range(1, 3)]
-
+    # Today + next 2 days (ESPN posts odds ~24–36h out), as explicit US-Eastern
+    # dates so we never miss today's slate. ESPN is free, so extra fetches cost
+    # nothing.
     results, seen = [], set()
     try:
-        for dp in date_params:
-            resp = requests.get(url, params=({"dates": dp} if dp else {}),
+        for dp in _espn_dates(days_forward=2):
+            resp = requests.get(url, params={"dates": dp},
                                 headers=ESPN_HDR, timeout=8)
             if resp.status_code != 200:
                 continue

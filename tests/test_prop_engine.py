@@ -282,9 +282,8 @@ class _ScoreResp:
 
 
 def _fake_scoreboard(url, **kwargs):
-    # Only today's board (no ?dates=) returns games; prior days are empty.
-    if kwargs.get("params"):
-        return _ScoreResp({"events": []})
+    # Every fetch now passes an explicit ?dates=; return the same board for any
+    # date (get_game_scores dedupes by event id).
     return _ScoreResp({"events": [
         {"id": "1", "date": "2026-07-19T23:00Z",
          "status": {"type": {"state": "in", "shortDetail": "Top 7th"}},
@@ -336,8 +335,8 @@ class TestGetGameScores:
 # ─────────────────────────────────────────
 
 def _fake_lines_board(url, **kwargs):
-    if kwargs.get("params"):          # future-day fetches → empty
-        return _ScoreResp({"events": []})
+    # Every fetch now passes an explicit ?dates=; return the same board for any
+    # date (get_game_lines dedupes by event id).
     return _ScoreResp({"events": [
         {"id": "10", "date": "2026-07-20T23:00Z", "competitions": [{
             "competitors": [

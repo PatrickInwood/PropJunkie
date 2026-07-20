@@ -1,0 +1,170 @@
+<title>PropJunkie — Audience One-Pager</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0c0f0a; --surface: #141a12; --surface2: #1a2218; --border: #24311f;
+    --accent: #c9a84c; --green: #10b981; --text: #e8ecf4; --text-2: #b8c8b6; --muted: #6b8563;
+  }
+  :root[data-theme="light"] {
+    --bg: #e7e2d6; --surface: #ffffff; --surface2: #f4f1e8; --border: #d8d2c4;
+    --accent: #9a7620; --green: #157a52; --text: #1a1a14; --text-2: #4a5040; --muted: #7a7255;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #e7e2d6; --surface: #ffffff; --surface2: #f4f1e8; --border: #d8d2c4;
+      --accent: #9a7620; --green: #157a52; --text: #1a1a14; --text-2: #4a5040; --muted: #7a7255;
+    }
+  }
+  html, body { background: var(--bg); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  body { display: flex; justify-content: center; align-items: flex-start; padding: 16px; min-height: 100vh; }
+
+  .card {
+    container-type: inline-size;
+    width: min(1080px, 96vw);
+    aspect-ratio: 1080 / 1350;
+    background:
+      radial-gradient(120% 80% at 85% -8%, rgba(201,168,76,0.10), transparent 55%),
+      radial-gradient(90% 60% at -5% 108%, rgba(16,185,129,0.07), transparent 55%),
+      var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3.2cqw;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 6cqw 5.2cqw 4.4cqw;
+    position: relative;
+  }
+
+  /* ---- header ---- */
+  .top { display: flex; align-items: baseline; justify-content: space-between; }
+  .logo { font-size: 5cqw; font-weight: 900; letter-spacing: -0.02em; color: var(--text); }
+  .logo span { color: var(--accent); }
+  .kicker { font-size: 1.9cqw; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; color: var(--muted); }
+
+  .title { margin-top: 3.6cqw; font-size: 7.4cqw; font-weight: 900; line-height: 1.02; letter-spacing: -0.02em; color: var(--text); }
+  .title em { font-style: normal; color: var(--accent); }
+  .subtitle { margin-top: 1.8cqw; font-size: 2.5cqw; font-weight: 500; color: var(--text-2); max-width: 82%; line-height: 1.35; }
+
+  .rule { display: flex; align-items: center; gap: 2cqw; margin: 4.4cqw 0 2.8cqw; }
+  .rule span { font-size: 2.1cqw; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .rule::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+  /* ---- segments ---- */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.4cqw; }
+  .seg {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 2.4cqw;
+    padding: 3cqw 3cqw 2.8cqw; display: flex; flex-direction: column;
+  }
+  .seg-head { display: flex; align-items: center; gap: 2cqw; }
+  .badge {
+    width: 6.4cqw; height: 6.4cqw; flex: 0 0 auto; border-radius: 1.6cqw;
+    background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.35);
+    color: var(--accent); font-weight: 900; font-size: 3.4cqw;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .seg-name { font-size: 2.9cqw; font-weight: 800; line-height: 1.05; color: var(--text); letter-spacing: -0.01em; }
+  .seg-who { margin-top: 2.4cqw; font-size: 2.25cqw; font-weight: 500; line-height: 1.4; color: var(--text-2); }
+  .seg-hook {
+    margin-top: 2.6cqw; padding-top: 2.4cqw; border-top: 1px solid var(--border);
+    font-size: 2.15cqw; line-height: 1.38; color: var(--text-2);
+  }
+  .seg-hook b { color: var(--green); font-weight: 800; }
+
+  /* ---- ladder ---- */
+  .ladder { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2.4cqw; }
+  .step {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 2.4cqw;
+    padding: 2.8cqw 2.6cqw; position: relative; display: flex; flex-direction: column;
+  }
+  .step.convert { border-color: rgba(16,185,129,0.45); background:
+      linear-gradient(180deg, rgba(16,185,129,0.08), transparent 60%), var(--surface); }
+  .step-n { font-size: 2cqw; font-weight: 800; letter-spacing: 0.15em; color: var(--muted); }
+  .step-label { margin-top: 1cqw; font-size: 3.2cqw; font-weight: 900; letter-spacing: 0.02em; color: var(--accent); }
+  .step.convert .step-label { color: var(--green); }
+  .step-txt { margin-top: 1.8cqw; font-size: 2cqw; line-height: 1.4; color: var(--text-2); }
+  .step-txt b { color: var(--text); font-weight: 700; }
+  .arrow { position: absolute; top: 50%; right: -2.35cqw; transform: translateY(-50%);
+    font-size: 2.6cqw; color: var(--muted); z-index: 2; }
+
+  /* ---- footer ---- */
+  .foot { margin-top: auto; padding-top: 3.4cqw; display: flex; align-items: center; justify-content: space-between; gap: 2cqw; }
+  .disc { font-size: 1.7cqw; font-weight: 500; color: var(--muted); line-height: 1.35; }
+  .site { font-size: 2cqw; font-weight: 800; color: var(--accent); white-space: nowrap; }
+</style>
+
+<div class="card">
+  <div class="top">
+    <div class="logo"><span>Prop</span>Junkie</div>
+    <div class="kicker">Audience Strategy</div>
+  </div>
+
+  <div class="title">Who We're <em>Building For</em></div>
+  <div class="subtitle">Four segments worth the attention — and the one honest feature that hooks each one.</div>
+
+  <div class="rule"><span>The Segments</span></div>
+
+  <div class="grid">
+    <div class="seg">
+      <div class="seg-head">
+        <div class="badge">A</div>
+        <div class="seg-name">The Burned Skeptic</div>
+      </div>
+      <div class="seg-who">Bought a tout's picks, got burned — now hunting for someone actually honest.</div>
+      <div class="seg-hook">Hook: <b>/record</b> — every lean graded vs. the final, in public.</div>
+    </div>
+
+    <div class="seg">
+      <div class="seg-head">
+        <div class="badge">B</div>
+        <div class="seg-name">The Data / Model Nerd</div>
+      </div>
+      <div class="seg-who">Loves the process — EV, sample size, methodology as much as the win.</div>
+      <div class="seg-hook">Hook: <b>Transparent model</b> — recent form + MLB pitcher ERA.</div>
+    </div>
+
+    <div class="seg">
+      <div class="seg-head">
+        <div class="badge">C</div>
+        <div class="seg-name">The Casual Slate-Checker</div>
+      </div>
+      <div class="seg-who">Bets a few games a week. Wants a fast, smart gut-check before tip.</div>
+      <div class="seg-hook">Hook: <b>Daily Slate</b> — ⭐ model leans, free, one glance.</div>
+    </div>
+
+    <div class="seg">
+      <div class="seg-head">
+        <div class="badge">D</div>
+        <div class="seg-name">The Prop Specialist</div>
+      </div>
+      <div class="seg-who">Player-props focused; tracks minutes, usage and matchups.</div>
+      <div class="seg-hook">Hook: <b>Prop Analyzer</b> — projection from recent games vs. the line.</div>
+    </div>
+  </div>
+
+  <div class="rule"><span>The Funnel</span></div>
+
+  <div class="ladder">
+    <div class="step">
+      <div class="step-n">01</div>
+      <div class="step-label">FOLLOW</div>
+      <div class="step-txt"><b>"We grade every pick — win or lose."</b> Pin the /record proof.</div>
+      <div class="arrow">&rarr;</div>
+    </div>
+    <div class="step">
+      <div class="step-n">02</div>
+      <div class="step-label">ENGAGE</div>
+      <div class="step-txt"><b>"Model vs. You"</b> polls + how-the-model-works threads.</div>
+      <div class="arrow">&rarr;</div>
+    </div>
+    <div class="step convert">
+      <div class="step-n">03</div>
+      <div class="step-label">CONVERT</div>
+      <div class="step-txt"><b>"Tonight's leans are live. Free."</b> Daily Slate CTA.</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="disc">21+. For entertainment. Please gamble responsibly.<br>A lean, not a lock — we show our record.</div>
+    <div class="site">propjunkie.app</div>
+  </div>
+</div>
