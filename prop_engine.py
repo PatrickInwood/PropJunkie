@@ -1363,19 +1363,33 @@ GAME_MODEL_CONFIG = {
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5, "sp_weight": 0.55,
                              # MLB run line is ±1.5 with heavy juice; only lean on a clearly
                              # mispriced margin so we're selective, not "always take the dog +1.5".
-                             "spread_threshold": 2.0, "spread_edge_cap": 3.0},
+                             "spread_threshold": 2.0, "spread_edge_cap": 3.0, "form_half_life": 10},
     "basketball_nba":       {"lookback_days": 24, "home_adv": 2.5,  "pyth_exp": 13.9, "regress_games": 4,
                              "min_games": 5, "total_threshold": 3.0, "ml_threshold": 0.03, "unit": "pts",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 14,
-                             "spread_threshold": 2.5, "spread_edge_cap": 12},
+                             "spread_threshold": 2.5, "spread_edge_cap": 12, "form_half_life": 14},
     "americanfootball_nfl": {"lookback_days": 45, "home_adv": 2.0,  "pyth_exp": 2.37, "regress_games": 3,
                              "min_games": 3, "total_threshold": 2.5, "ml_threshold": 0.03, "unit": "pts",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 12,
-                             "spread_threshold": 2.0, "spread_edge_cap": 10},
+                             "spread_threshold": 2.0, "spread_edge_cap": 10, "form_half_life": 28},
     "icehockey_nhl":        {"lookback_days": 21, "home_adv": 0.3,  "pyth_exp": 2.0, "regress_games": 5,
                              "min_games": 5, "total_threshold": 0.6, "ml_threshold": 0.03, "unit": "goals",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5,
-                             "spread_threshold": 0.75, "spread_edge_cap": 3.0},
+                             "spread_threshold": 0.75, "spread_edge_cap": 3.0, "form_half_life": 14},
+}
+
+# MLB park run-environment factors (≈1.0 neutral): hitter-friendly parks inflate
+# the total, pitcher-friendly ones suppress it. Applied to the projected total
+# only — a park lifts/dampens both sides, so it barely moves the margin. Static,
+# free, and a well-established driver of run scoring. Unlisted parks = 1.0.
+MLB_PARK_FACTORS = {
+    "Colorado Rockies": 1.15, "Boston Red Sox": 1.05, "Cincinnati Reds": 1.06,
+    "Kansas City Royals": 1.03, "Baltimore Orioles": 1.03, "Arizona Diamondbacks": 1.02,
+    "Philadelphia Phillies": 1.02, "Texas Rangers": 1.02, "Chicago Cubs": 1.01,
+    "San Diego Padres": 0.91, "San Francisco Giants": 0.92, "Miami Marlins": 0.92,
+    "Seattle Mariners": 0.93, "New York Mets": 0.95, "Tampa Bay Rays": 0.95,
+    "Detroit Tigers": 0.95, "Cleveland Guardians": 0.96, "St. Louis Cardinals": 0.96,
+    "Oakland Athletics": 0.96, "Athletics": 0.97,
 }
 
 
@@ -1422,35 +1436,42 @@ def fetch_recent_results(sport_key: str, lookback_days: int) -> list:
                     "away":       away_name,
                     "home_score": hs,
                     "away_score": as_,
+                    "days_ago":   i,   # for recency weighting
                 })
         except requests.exceptions.RequestException:
             continue
     return results
 
 
-def compute_team_ratings(results: list) -> tuple:
+def compute_team_ratings(results: list, half_life: float = None) -> tuple:
     """From recent games, build per-team scoring rates + the league average.
 
     Returns (ratings, lg_avg) where ratings[team] = {'rs','ra','games'}:
     rs = avg scored per game, ra = avg allowed per game. lg_avg = average points
     a team scores per game across the sample (the model's baseline).
+
+    When ``half_life`` (in days) is given, games are recency-weighted — a game
+    ``half_life`` days old counts half as much — so hot/cold form shows through.
+    Flat average otherwise; 'games' stays the raw count for the min-games gate.
     """
     stats = {}
-    total_points, team_games = 0, 0
+    total_w_points, total_w = 0.0, 0.0
     for g in results:
+        w = 0.5 ** (g.get("days_ago", 0) / half_life) if half_life else 1.0
         for team, sf, sa in ((g["home"], g["home_score"], g["away_score"]),
                              (g["away"], g["away_score"], g["home_score"])):
-            d = stats.setdefault(team, {"scored": 0, "allowed": 0, "games": 0})
-            d["scored"] += sf
-            d["allowed"] += sa
+            d = stats.setdefault(team, {"scored": 0.0, "allowed": 0.0, "w": 0.0, "games": 0})
+            d["scored"] += sf * w
+            d["allowed"] += sa * w
+            d["w"] += w
             d["games"] += 1
-            total_points += sf
-            team_games += 1
-    lg_avg = (total_points / team_games) if team_games else 0.0
-    ratings = {t: {"rs": d["scored"] / d["games"],
-                   "ra": d["allowed"] / d["games"],
+            total_w_points += sf * w
+            total_w += w
+    lg_avg = (total_w_points / total_w) if total_w else 0.0
+    ratings = {t: {"rs": d["scored"] / d["w"],
+                   "ra": d["allowed"] / d["w"],
                    "games": d["games"]}
-               for t, d in stats.items()}
+               for t, d in stats.items() if d["w"] > 0}
     return ratings, lg_avg
 
 
@@ -1617,7 +1638,8 @@ def get_team_ratings(sport_key: str) -> tuple:
     c = _ratings_cache.get(sport_key)
     if c and time.time() - c["ts"] < _MODEL_CACHE_TTL:
         return c["ratings"], c["lg"]
-    ratings, lg = compute_team_ratings(fetch_recent_results(sport_key, cfg["lookback_days"]))
+    ratings, lg = compute_team_ratings(fetch_recent_results(sport_key, cfg["lookback_days"]),
+                                       half_life=cfg.get("form_half_life"))
     if ratings:
         _ratings_cache[sport_key] = {"ratings": ratings, "lg": lg, "ts": time.time()}
     return ratings, lg
@@ -1649,7 +1671,8 @@ def generate_game_picks(sport_key: str) -> dict:
     games = get_game_lines(sport_key)
     if not games:
         return {}
-    ratings, lg_avg = compute_team_ratings(fetch_recent_results(sport_key, cfg["lookback_days"]))
+    ratings, lg_avg = compute_team_ratings(fetch_recent_results(sport_key, cfg["lookback_days"]),
+                                           half_life=cfg.get("form_half_life"))
     if not ratings:
         return {}
 
@@ -1672,16 +1695,19 @@ def generate_game_picks(sport_key: str) -> dict:
         # ── Total: model projection vs the posted line ──
         # Flag a lean when the model differs by more than the threshold, but not
         # by an implausible amount (that signals model noise, not a real edge).
+        # For MLB, scale the total by the home park's run environment.
+        park = MLB_PARK_FACTORS.get(g["home_team"], 1.0) if sport_key == "baseball_mlb" else 1.0
+        proj_total = proj["proj_total"] * park
         totals = g.get("totals")
         if totals and totals.get("line") is not None:
             line = totals["line"]
-            diff = proj["proj_total"] - line
+            diff = proj_total - line
             if cfg["total_threshold"] <= abs(diff) <= cfg["total_edge_cap"]:
                 side = "Over" if diff > 0 else "Under"
                 entry["totals"] = {
                     "pick":  f"{side} {line}",
                     "side":  side.lower(),
-                    "model": round(proj["proj_total"], 1),
+                    "model": round(proj_total, 1),
                     "line":  line,
                     "edge":  round(abs(diff), 1),
                     "unit":  cfg["unit"],

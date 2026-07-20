@@ -548,3 +548,49 @@ class TestOpponentContext:
         monkeypatch.setattr(pe, "_player_team", lambda n, s: "")
         assert pe.fetch_espn_defense_context("X", "player_batter_hits",
                                              "baseball_mlb", "A", "B") == ""
+
+
+# ─────────────────────────────────────────
+# MODEL SHARPENING — recency weighting + park factors
+# ─────────────────────────────────────────
+
+class TestModelSharpening:
+    def test_recency_weighting_favors_recent_form(self):
+        games = [
+            {"home": "H", "away": "X", "home_score": 9, "away_score": 2, "days_ago": 1},
+            {"home": "H", "away": "Y", "home_score": 8, "away_score": 3, "days_ago": 2},
+            {"home": "H", "away": "Z", "home_score": 2, "away_score": 5, "days_ago": 16},
+            {"home": "H", "away": "W", "home_score": 1, "away_score": 6, "days_ago": 17},
+        ]
+        flat, _ = pe.compute_team_ratings(games)
+        wtd, _ = pe.compute_team_ratings(games, half_life=10)
+        assert wtd["H"]["rs"] > flat["H"]["rs"]   # recent surge counts more
+        assert wtd["H"]["games"] == 4             # raw count kept for the min-games gate
+
+    def _even(self, home):
+        games = []
+        for _ in range(3):
+            for h, a in ((home, "Opp"), (home, "Third"), ("Opp", "Third")):
+                games.append({"home": h, "away": a, "home_score": 4, "away_score": 4, "days_ago": 1})
+        return games
+
+    def _line(self, home):
+        return [{"id": "g", "sport": "baseball_mlb", "home_team": home, "away_team": "Opp",
+                 "commence_time": "2026-07-20T23:00Z", "h2h": None, "spreads": None,
+                 "totals": {"line": 7.0, "over_odds": -110, "under_odds": -110}, "source_book": "DK"}]
+
+    def _model_total(self, monkeypatch, home):
+        pe._ratings_cache.clear()
+        monkeypatch.setattr(pe, "fetch_probable_pitchers", lambda s: ({}, None))
+        monkeypatch.setattr(pe, "get_game_lines", lambda s: self._line(home))
+        monkeypatch.setattr(pe, "fetch_recent_results", lambda s, d: self._even(home))
+        picks = pe.generate_game_picks("baseball_mlb")
+        return next(iter(picks.values()), {}).get("totals", {}).get("model")
+
+    def test_park_factor_inflates_hitter_park(self, monkeypatch):
+        # Identical even 4-4 matchup (base total 8.0); only the home park changes.
+        coors = self._model_total(monkeypatch, "Colorado Rockies")   # 1.15
+        neutral = self._model_total(monkeypatch, "Houston Astros")   # unlisted → 1.0
+        assert neutral == pytest.approx(8.0, abs=0.2)
+        assert coors > neutral                                       # Coors inflates the total
+        assert coors == pytest.approx(8.0 * 1.15, abs=0.2)
