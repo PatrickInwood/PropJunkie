@@ -205,7 +205,7 @@
 <div class="container">
     <div class="page-header">
         <div class="page-title">Daily Slate</div>
-        <div class="page-subtitle">Today's games across every market — with ⭐ PropJunkie model leans on moneyline &amp; total.</div>
+        <div class="page-subtitle">Today's games across every market — with ⭐ PropJunkie model leans on moneyline, spread &amp; total.</div>
     </div>
 
     <a href="/record" id="recordBanner" class="record-banner" style="display:none;text-decoration:none;"></a>
@@ -328,6 +328,10 @@
             const t = pk.totals;
             return `<div class="pick-bar"><span class="pick-star">⭐ MODEL LEAN</span> <b>${t.pick}</b> · proj ${t.model} <span class="pick-edge">+${t.edge} ${t.unit}</span>${sample}</div>`;
         }
+        if (selectedMarket === 'spreads' && pk.spreads) {
+            const s = pk.spreads;
+            return `<div class="pick-bar"><span class="pick-star">⭐ MODEL LEAN</span> <b>${s.pick}</b> · <span class="pick-edge">+${s.edge} ${s.unit}</span> past the line${sample}</div>`;
+        }
         if (selectedMarket === 'h2h' && pk.h2h) {
             const h = pk.h2h;
             return `<div class="pick-bar"><span class="pick-star">⭐ MODEL LEAN</span> <b>${h.pick}</b> · model ${Math.round(h.model_prob * 100)}% vs mkt ${Math.round(h.market_prob * 100)}% <span class="pick-edge">+${h.edge}%</span>${sample}</div>`;
@@ -368,7 +372,7 @@
         for (const [label, games] of Object.entries(groups)) {
             html += `<div class="date-group"><div class="date-label">${label}</div>${games.map(renderCard).join('')}</div>`;
         }
-        html += `<div class="note-bar">Odds from DraftKings via ESPN (free). ⭐ Model leans compare our projection — built from each team's recent scoring — to the market line. They're a lean, not a lock: recent form only, no pitchers/injuries/rest. Bet responsibly.</div>`;
+        html += `<div class="note-bar">Odds from DraftKings via ESPN (free). ⭐ Model leans compare our projection — built from each team's recent scoring, plus the starting pitchers for MLB — to the market line. They're a lean, not a lock: no injuries, lineups, or weather. Bet responsibly.</div>`;
         container.innerHTML = html;
     }
 

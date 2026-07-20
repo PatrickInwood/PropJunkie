@@ -33,6 +33,16 @@ class TestPickGrading:
         away = Pick(market="h2h", side="away")
         assert away.grade(3, 5) == "win"
 
+    def test_spread_grading(self):
+        # home_line -1.5 → home must win by 2+ to cover.
+        home = Pick(market="spreads", side="home", line=-1.5)
+        assert home.grade(5, 3) == "win"    # margin +2 > 1.5
+        assert home.grade(4, 3) == "loss"   # margin +1 < 1.5
+        away = Pick(market="spreads", side="away", line=-1.5)   # away +1.5
+        assert away.grade(4, 3) == "win"    # home won by 1 < 1.5 → away covers
+        push = Pick(market="spreads", side="home", line=-2.0)
+        assert push.grade(5, 3) == "push"   # margin +2 == 2.0
+
 
 class TestSnapshotAndRecord:
     def _picks_payload(self, commence):

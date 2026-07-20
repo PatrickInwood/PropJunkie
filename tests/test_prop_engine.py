@@ -454,6 +454,27 @@ class TestGenerateGamePicks:
         assert picks["g1"]["totals"]["pick"].startswith("Under")
         assert picks["g1"]["totals"]["edge"] <= pe.GAME_MODEL_CONFIG["baseball_mlb"]["total_edge_cap"]
 
+    def test_flags_spread_when_margin_clears_line(self, monkeypatch):
+        lines = [{"id": "g2", "sport": "baseball_mlb", "home_team": "A", "away_team": "B",
+                  "commence_time": "2026-07-20T23:00Z",
+                  "h2h": {"home": -200, "away": 170},
+                  "spreads": {"home_line": -1.5, "home_odds": 100, "away_line": 1.5, "away_odds": -120},
+                  "totals": None, "source_book": "DraftKings"}]
+        # A is a moderate favorite over B (7-2), even vs C → a home margin that
+        # clears -1.5 without exceeding the noise cap.
+        results = []
+        for _ in range(3):
+            for h, a, hs, as_ in [("A", "B", 7, 2), ("B", "A", 2, 7),
+                                  ("A", "C", 4, 4), ("C", "A", 4, 4),
+                                  ("B", "C", 4, 4), ("C", "B", 4, 4)]:
+                results.append({"home": h, "away": a, "home_score": hs, "away_score": as_})
+        monkeypatch.setattr(pe, "get_game_lines", lambda s: lines)
+        monkeypatch.setattr(pe, "fetch_recent_results", lambda s, d: results)
+        monkeypatch.setattr(pe, "fetch_probable_pitchers", lambda s: ({}, None))
+        picks = pe.generate_game_picks("baseball_mlb")
+        assert picks["g2"]["spreads"]["side"] == "home"
+        assert picks["g2"]["spreads"]["edge"] <= pe.GAME_MODEL_CONFIG["baseball_mlb"]["spread_edge_cap"]
+
     def test_unsupported_sport_returns_empty(self):
         assert pe.generate_game_picks("quidditch_pro") == {}
 

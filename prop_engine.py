@@ -1408,16 +1408,22 @@ GAME_MODEL_CONFIG = {
     #   pitcher) — suppress the pick. total_edge_cap: max believable total edge.
     "baseball_mlb":         {"lookback_days": 18, "home_adv": 0.15, "pyth_exp": 1.83, "regress_games": 5,
                              "min_games": 5, "total_threshold": 0.5, "ml_threshold": 0.03, "unit": "runs",
-                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5, "sp_weight": 0.55},
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5, "sp_weight": 0.55,
+                             # MLB run line is ±1.5 with heavy juice; only lean on a clearly
+                             # mispriced margin so we're selective, not "always take the dog +1.5".
+                             "spread_threshold": 2.0, "spread_edge_cap": 3.0},
     "basketball_nba":       {"lookback_days": 24, "home_adv": 2.5,  "pyth_exp": 13.9, "regress_games": 4,
                              "min_games": 5, "total_threshold": 3.0, "ml_threshold": 0.03, "unit": "pts",
-                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 14},
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 14,
+                             "spread_threshold": 2.5, "spread_edge_cap": 12},
     "americanfootball_nfl": {"lookback_days": 45, "home_adv": 2.0,  "pyth_exp": 2.37, "regress_games": 3,
                              "min_games": 3, "total_threshold": 2.5, "ml_threshold": 0.03, "unit": "pts",
-                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 12},
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 12,
+                             "spread_threshold": 2.0, "spread_edge_cap": 10},
     "icehockey_nhl":        {"lookback_days": 21, "home_adv": 0.3,  "pyth_exp": 2.0, "regress_games": 5,
                              "min_games": 5, "total_threshold": 0.6, "ml_threshold": 0.03, "unit": "goals",
-                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5},
+                             "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5,
+                             "spread_threshold": 0.75, "spread_edge_cap": 3.0},
 }
 
 
@@ -1553,6 +1559,8 @@ def project_game(home: str, away: str, ratings: dict, lg_avg: float, cfg: dict,
         "proj_total":    proj_total,
         "home_exp":      home_exp,
         "away_exp":      away_exp,
+        # Home margin including home advantage (positive = home favored).
+        "proj_margin":   (home_exp - away_exp) + cfg["home_adv"],
         "home_win_prob": home_win_prob,
         "min_games":     min(rh["games"], ra["games"]),
     }
@@ -1692,6 +1700,30 @@ def generate_game_picks(sport_key: str) -> dict:
                     "line":  line,
                     "edge":  round(abs(diff), 1),
                     "unit":  cfg["unit"],
+                }
+
+        # ── Spread / run line: model margin vs the posted spread ──
+        # Home covers when the projected margin beats the line (margin + home_line
+        # > 0). We lean the side the model has covering by more than the threshold,
+        # capped so noise doesn't masquerade as an edge. (For MLB's ±1.5 run line
+        # this rarely fires — margins are small — which is honest.)
+        spreads = g.get("spreads")
+        if spreads and spreads.get("home_line") is not None:
+            home_line = spreads["home_line"]
+            cover_edge = proj["proj_margin"] + home_line   # + = home covers
+            if cfg["spread_threshold"] <= abs(cover_edge) <= cfg["spread_edge_cap"]:
+                if cover_edge > 0:
+                    team, shown_line, side = g["home_team"], home_line, "home"
+                else:
+                    team, shown_line, side = g["away_team"], spreads.get("away_line"), "away"
+                sign = "+" if (shown_line is not None and shown_line > 0) else ""
+                entry["spreads"] = {
+                    "pick":         f"{team.split()[-1]} {sign}{shown_line}",
+                    "side":         side,
+                    "line":         home_line,   # store home_line; grading is home-relative
+                    "model_margin": round(proj["proj_margin"], 1),
+                    "edge":         round(abs(cover_edge), 1),
+                    "unit":         cfg["unit"],
                 }
 
         # ── Moneyline: a humble lean anchored to the market ──

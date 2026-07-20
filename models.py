@@ -191,6 +191,13 @@ class Pick(db.Model):
                 return "push"
             went_over = total > (self.line or 0)
             won = went_over if self.side == "over" else not went_over
+        elif self.market == "spreads":
+            # self.line is the home spread; home covers when margin + line > 0.
+            adj = (home_score - away_score) + (self.line or 0)
+            if adj == 0:
+                return "push"
+            home_covered = adj > 0
+            won = home_covered if self.side == "home" else not home_covered
         else:  # h2h — no ties in the sports we cover
             home_won = home_score > away_score
             won = home_won if self.side == "home" else not home_won

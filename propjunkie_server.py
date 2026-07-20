@@ -471,9 +471,12 @@ def _snapshot_picks(sport, picks):
     Never raise — accuracy tracking must not break the picks endpoint.
     """
     try:
+        # The frozen model_value differs by market: total projection, home win
+        # probability, or projected margin.
+        model_val = {"totals": "model", "h2h": "model_prob", "spreads": "model_margin"}
         added = False
         for gid, e in (picks or {}).items():
-            for market in ("totals", "h2h"):
+            for market in ("totals", "spreads", "h2h"):
                 m = e.get(market)
                 if not m:
                     continue
@@ -484,7 +487,7 @@ def _snapshot_picks(sport, picks):
                     commence_time=_parse_commence(e.get("commence")),
                     home_team=e.get("home"), away_team=e.get("away"),
                     pick=m.get("pick"), side=m.get("side"), line=m.get("line"),
-                    model_value=(m.get("model") if market == "totals" else m.get("model_prob")),
+                    model_value=m.get(model_val[market]),
                     edge=m.get("edge"),
                 ))
                 added = True
@@ -559,11 +562,14 @@ def model_record():
         "overall":   _record_from(graded),
         "last10":    _record_from(graded[:10]),
         "moneyline": _record_from([p for p in graded if p.market == "h2h"]),
+        "spread":    _record_from([p for p in graded if p.market == "spreads"]),
         "total":     _record_from([p for p in graded if p.market == "totals"]),
         "graded":    len(graded),
         "pending":   pending,
     })
 
+
+_MARKET_LABELS = {"h2h": "Moneyline", "spreads": "Spread", "totals": "Total"}
 
 _SPORT_LABELS = {
     "baseball_mlb": "MLB", "basketball_nba": "NBA",
@@ -592,7 +598,7 @@ def record_data():
         "date":   p.commence_time.strftime("%b %-d") if p.commence_time else "",
         "away":   p.away_team,
         "home":   p.home_team,
-        "market": "Total" if p.market == "totals" else "Moneyline",
+        "market": _MARKET_LABELS.get(p.market, p.market),
         "pick":   p.pick,
         "result": p.result,
         "score":  (f"{p.away_score}–{p.home_score}"
@@ -603,6 +609,7 @@ def record_data():
         "overall":   _record_from(graded),
         "last10":    _record_from(graded[:10]),
         "moneyline": _record_from([p for p in graded if p.market == "h2h"]),
+        "spread":    _record_from([p for p in graded if p.market == "spreads"]),
         "total":     _record_from([p for p in graded if p.market == "totals"]),
         "by_sport":  by_sport,
         "history":   history,
