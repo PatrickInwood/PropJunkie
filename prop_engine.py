@@ -23,6 +23,7 @@ import os
 import re
 import json
 import math
+import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import requests
@@ -560,24 +561,50 @@ def fetch_espn_player_context(player_name: str, market_key: str, sport_key: str)
 # ESPN OPPONENT DEFENSIVE STATS
 # ─────────────────────────────────────────
 
-# Maps market_key → (ESPN team-stats category fragment, [stat name fragments], human label)
-# These are the *opponent's* stats we want (e.g. rush yards allowed against them)
-MARKET_DEF_MAP = {
-    'player_rush_yds':           ('defense',   ['rushingyardsallowed', 'rushyardsallowed', 'rushingyards', 'rushing yards'],  'rush yds allowed/gm'),
-    'player_pass_yds':           ('defense',   ['passingyardsallowed', 'passyardsallowed', 'passingyards', 'passing yards'],  'pass yds allowed/gm'),
-    'player_reception_yds':      ('defense',   ['passingyardsallowed', 'passyardsallowed', 'passingyards'],                    'pass yds allowed/gm'),
-    'player_receptions':         ('defense',   ['receptions', 'rec', 'catches'],                                               'receptions allowed/gm'),
-    'player_anytime_td':         ('defense',   ['touchdownsallowed', 'touchdowns', 'td'],                                     'TDs allowed/gm'),
-    'player_points':             ('defense',   ['pointsallowed', 'points allowed', 'opponentpoints'],                          'pts allowed/gm'),
-    'player_batter_hits':          ('pitching',  [' h ', 'hits'],                                 'hits allowed/gm'),
-    'player_pitcher_strikeouts':   ('pitching',  ['strikeouts', 'so', ' k'],                     'K/gm'),
-    'player_pitcher_hits_allowed': ('pitching',  [' h ', 'hits'],                                'hits allowed/gm'),
-    'player_batter_home_runs':     ('pitching',  ['homerunsallowed', 'homeruns', 'hr'],           'HR allowed/gm'),
-    'player_batter_total_bases':   ('pitching',  ['totalbases', 'tb', 'hits'],                   'TB/hits allowed/gm'),
-    'player_batter_rbis':          ('pitching',  ['earnedrunsallowed', 'era', 'runs'],            'runs allowed/gm'),
-    'player_batter_runs_scored':   ('pitching',  ['earnedrunsallowed', 'era', 'runs'],            'runs allowed/gm'),
-    'player_shots_on_goal':        ('defense',   ['shotsagainst', 'shots', 'shotsallowed'],       'shots against/gm'),
-}
+def _words_overlap(a: str, b: str) -> bool:
+    """True if any meaningful word (>2 chars) appears in both team names."""
+    aw = {w for w in (a or "").lower().split() if len(w) > 2}
+    bw = {w for w in (b or "").lower().split() if len(w) > 2}
+    return bool(aw & bw)
+
+
+def _match_rating(team_name: str, ratings: dict):
+    """Find a team's rating row by exact name, then by word overlap."""
+    if team_name in ratings:
+        return ratings[team_name]
+    for t, r in ratings.items():
+        if _words_overlap(team_name, t):
+            return r
+    return None
+
+
+def _player_team(player_name: str, sport_key: str) -> str:
+    """The player's current team name, for the opponent lookup. '' on failure.
+
+    MLB: the official Stats API (currentTeam). NBA/NFL/NHL: ESPN's search API,
+    which returns the team in each result's subtitle.
+    """
+    try:
+        if sport_key == "baseball_mlb":
+            r = requests.get(f"{MLB_STATS_BASE}/people/search",
+                             params={"names": player_name, "hydrate": "currentTeam"},
+                             headers=ESPN_HDR, timeout=6)
+            if r.status_code != 200:
+                return ""
+            ppl = r.json().get("people", [])
+            return ((ppl[0].get("currentTeam") or {}).get("name") or "") if ppl else ""
+        r = requests.get(ESPN_SEARCH_URL, params={"query": player_name, "limit": 5},
+                         headers=ESPN_HDR, timeout=6)
+        if r.status_code != 200:
+            return ""
+        for grp in r.json().get("results", []):
+            if "player" in str(grp.get("type", "")).lower():
+                for c in grp.get("contents", []):
+                    if c.get("subtitle"):
+                        return c["subtitle"]
+        return ""
+    except requests.exceptions.RequestException:
+        return ""
 
 
 def fetch_espn_defense_context(
@@ -587,137 +614,62 @@ def fetch_espn_defense_context(
     home_team:   str,
     away_team:   str,
 ) -> str:
-    """
-    Fetch the opponent's relevant defensive stats from ESPN.
-    Steps:
-      1. Look up player's ESPN team via athlete profile
-      2. Determine which of home_team / away_team is the opponent
-      3. Search ESPN teams for the opponent → get team ID
-      4. Fetch team statistics → find defensive category stat
-    Returns '' on any error — never blocks main analysis.
+    """Opponent-matchup context for the AI analysis, from free data.
+
+    Finds the player's team, identifies the opponent, and reports how the
+    opponent has performed recently — the opponent's runs/points/goals allowed
+    per game, plus (MLB) the opposing starting pitcher, which is the single
+    biggest factor in a batter's night. Returns '' on any failure so it never
+    blocks the main analysis. Results reuse the cached recent-form data.
     """
     try:
         if not home_team or not away_team:
             return ''
-        sport_info = ESPN_SPORT_MAP.get(sport_key)
-        if not sport_info:
-            return ''
-        sport, league = sport_info
-
-        def_info = MARKET_DEF_MAP.get(market_key)
-        if not def_info:
-            return ''
-        cat_frag, stat_frags, human_label = def_info
-        if isinstance(stat_frags, str):
-            stat_frags = [stat_frags]
-
-        # ── Step 1: find player's team ──────────────────────────────────
-        r = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/athletes",
-            params={'search': player_name, 'limit': 5},
-            headers=ESPN_HDR, timeout=5,
-        )
-        if r.status_code != 200:
-            return ''
-        items = r.json().get('items', [])
-        if not items:
-            return ''
-
-        athlete_id = str(items[0]['id'])
-        r2 = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/athletes/{athlete_id}",
-            headers=ESPN_HDR, timeout=5,
-        )
-        if r2.status_code != 200:
-            return ''
-
-        ath = r2.json().get('athlete', {})
-        team_data = ath.get('team', {})
-        player_team = (
-            team_data.get('displayName') or
-            team_data.get('name') or
-            team_data.get('shortDisplayName') or ''
-        )
+        player_team = _player_team(player_name, sport_key)
         if not player_team:
             return ''
 
-        # ── Step 2: determine opponent ──────────────────────────────────
-        def words_overlap(a: str, b: str) -> bool:
-            """True if any meaningful word appears in both names."""
-            a_words = {w for w in a.lower().split() if len(w) > 2}
-            b_words = {w for w in b.lower().split() if len(w) > 2}
-            return bool(a_words & b_words)
-
-        if words_overlap(player_team, home_team):
-            opponent_name = away_team
-        elif words_overlap(player_team, away_team):
-            opponent_name = home_team
+        if _words_overlap(player_team, home_team):
+            opponent, player_is_home = away_team, True
+        elif _words_overlap(player_team, away_team):
+            opponent, player_is_home = home_team, False
         else:
             return ''
 
-        # ── Step 3: search ESPN for opponent team ID ────────────────────
-        r3 = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/teams",
-            params={'search': opponent_name, 'limit': 8},
-            headers=ESPN_HDR, timeout=5,
-        )
-        if r3.status_code != 200:
+        # A pitcher faces the opposing lineup; a hitter (and non-MLB scorer)
+        # faces the opposing defense/pitching. That flips which stats matter.
+        is_pitcher = market_key.startswith("player_pitcher")
+        parts = []
+
+        # MLB hitter: the opposing starting pitcher is the dominant factor.
+        if sport_key == "baseball_mlb" and not is_pitcher:
+            sp_map, _ = get_probable_pitchers(sport_key)
+            m = sp_map.get((_norm_team(away_team), _norm_team(home_team)), {})
+            if player_is_home:
+                sp_name, sp_era = m.get("away_sp_name"), m.get("away_sp_era")
+            else:
+                sp_name, sp_era = m.get("home_sp_name"), m.get("home_sp_era")
+            if sp_name:
+                era = f" ({sp_era:.2f} ERA)" if sp_era is not None else ""
+                parts.append(f"opposing starter {sp_name}{era}")
+
+        # The opponent's recent form: how much the lineup a pitcher faces SCORES,
+        # or how much the defense a hitter/scorer faces ALLOWS.
+        cfg = GAME_MODEL_CONFIG.get(sport_key)
+        if cfg:
+            ratings, lg = get_team_ratings(sport_key)
+            opp = _match_rating(opponent, ratings)
+            if opp and opp["games"] >= 3:
+                if is_pitcher:
+                    parts.append(f"{opponent} score {opp['rs']:.1f} {cfg['unit']}/gm recently"
+                                 f" (league avg {lg:.1f})")
+                else:
+                    parts.append(f"{opponent} allow {opp['ra']:.1f} {cfg['unit']}/gm recently"
+                                 f" (league avg {lg:.1f})")
+
+        if not parts:
             return ''
-
-        raw = r3.json()
-        team_id = None
-
-        # ESPN returns different shapes — handle both
-        candidates = raw.get('items', [])
-        if not candidates:
-            # Try sports → leagues → teams shape
-            for sp in raw.get('sports', []):
-                for lg in sp.get('leagues', []):
-                    for t in lg.get('teams', []):
-                        candidates.append(t.get('team', t))
-
-        for item in candidates:
-            t_name = item.get('displayName') or item.get('name') or ''
-            if words_overlap(opponent_name, t_name):
-                team_id = str(item.get('id', ''))
-                break
-        if not team_id:
-            # fall back: first result
-            if candidates:
-                team_id = str(candidates[0].get('id', ''))
-        if not team_id:
-            return ''
-
-        # ── Step 4: fetch team statistics and find the relevant stat ────
-        r4 = requests.get(
-            f"{ESPN_BASE}/{sport}/{league}/teams/{team_id}/statistics",
-            headers=ESPN_HDR, timeout=6,
-        )
-        if r4.status_code != 200:
-            return ''
-
-        cats = r4.json().get('splits', {}).get('categories', [])
-        for cat in cats:
-            if cat_frag.lower() not in cat.get('name', '').lower():
-                continue
-            for stat in cat.get('stats', []):
-                n = stat.get('name', '')
-                n_padded = ' ' + n.lower().replace(' ', '') + ' '
-                n_plain  = ' ' + n.lower() + ' '
-                if any(
-                    f.lower().replace(' ', '') in n_padded or
-                    f.lower() in n_plain or
-                    f.lower().strip() == n.lower().strip()
-                    for f in stat_frags
-                ):
-                    val = stat.get('displayValue') or str(stat.get('value', ''))
-                    if val:
-                        return (
-                            f"🛡️ OPP DEFENSE ({opponent_name}): "
-                            f"{human_label}: **{val}**"
-                        )
-
-        return ''
+        return f"🛡️ OPPONENT MATCHUP ({opponent}): " + "; ".join(parts)
     except Exception:
         return ''
 
@@ -1647,6 +1599,39 @@ def fetch_probable_pitchers(sport_key: str) -> tuple:
         return matchups, avg_era
     except requests.exceptions.RequestException:
         return {}, None
+
+
+# Recent-form inputs move slowly, so cache them for reuse across the picks
+# endpoint and the prop-analysis opponent context (which would otherwise re-scan
+# ~3 weeks of games on every request).
+_ratings_cache: dict = {}
+_pitchers_cache: dict = {}
+_MODEL_CACHE_TTL = 3600   # seconds (1h)
+
+
+def get_team_ratings(sport_key: str) -> tuple:
+    """Cached (ratings, lg_avg) for a sport. ({}, 0.0) if unsupported."""
+    cfg = GAME_MODEL_CONFIG.get(sport_key)
+    if not cfg:
+        return {}, 0.0
+    c = _ratings_cache.get(sport_key)
+    if c and time.time() - c["ts"] < _MODEL_CACHE_TTL:
+        return c["ratings"], c["lg"]
+    ratings, lg = compute_team_ratings(fetch_recent_results(sport_key, cfg["lookback_days"]))
+    if ratings:
+        _ratings_cache[sport_key] = {"ratings": ratings, "lg": lg, "ts": time.time()}
+    return ratings, lg
+
+
+def get_probable_pitchers(sport_key: str) -> tuple:
+    """Cached probable-pitcher map + average starter ERA (MLB)."""
+    c = _pitchers_cache.get(sport_key)
+    if c and time.time() - c["ts"] < _MODEL_CACHE_TTL:
+        return c["map"], c["avg"]
+    m, avg = fetch_probable_pitchers(sport_key)
+    if m:
+        _pitchers_cache[sport_key] = {"map": m, "avg": avg, "ts": time.time()}
+    return m, avg
 
 
 def generate_game_picks(sport_key: str) -> dict:

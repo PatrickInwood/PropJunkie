@@ -514,3 +514,37 @@ class TestStartingPitcherAdjustment:
 
     def test_probable_pitchers_non_mlb_is_empty(self):
         assert pe.fetch_probable_pitchers("basketball_nba") == ({}, None)
+
+
+# ─────────────────────────────────────────
+# OPPONENT MATCHUP CONTEXT (for the AI analysis)
+# ─────────────────────────────────────────
+
+class TestOpponentContext:
+    def test_batter_gets_opposing_starter_and_defense(self, monkeypatch):
+        monkeypatch.setattr(pe, "_player_team", lambda n, s: "New York Yankees")
+        monkeypatch.setattr(pe, "get_probable_pitchers", lambda s: (
+            {("pittsburgh pirates", "new york yankees"):
+             {"away_sp_name": "A. Starter", "away_sp_era": 3.49,
+              "home_sp_name": "H. Starter", "home_sp_era": 4.0}}, 4.1))
+        monkeypatch.setattr(pe, "get_team_ratings", lambda s: (
+            {"Pittsburgh Pirates": {"rs": 3.9, "ra": 3.5, "games": 12}}, 4.5))
+        ctx = pe.fetch_espn_defense_context("Aaron Judge", "player_batter_hits",
+                                            "baseball_mlb", "New York Yankees", "Pittsburgh Pirates")
+        assert "opposing starter A. Starter" in ctx and "3.49" in ctx
+        assert "allow 3.5 runs/gm" in ctx
+
+    def test_pitcher_gets_opposing_offense_not_a_starter(self, monkeypatch):
+        monkeypatch.setattr(pe, "_player_team", lambda n, s: "Detroit Tigers")
+        monkeypatch.setattr(pe, "get_probable_pitchers", lambda s: ({}, None))
+        monkeypatch.setattr(pe, "get_team_ratings", lambda s: (
+            {"Chicago Cubs": {"rs": 4.6, "ra": 4.2, "games": 12}}, 4.5))
+        ctx = pe.fetch_espn_defense_context("Tarik Skubal", "player_pitcher_strikeouts",
+                                            "baseball_mlb", "Chicago Cubs", "Detroit Tigers")
+        assert "score 4.6 runs/gm" in ctx
+        assert "opposing starter" not in ctx
+
+    def test_unknown_player_team_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(pe, "_player_team", lambda n, s: "")
+        assert pe.fetch_espn_defense_context("X", "player_batter_hits",
+                                             "baseball_mlb", "A", "B") == ""
