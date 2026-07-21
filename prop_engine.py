@@ -1785,6 +1785,67 @@ def generate_game_picks(sport_key: str) -> dict:
     return picks
 
 
+def _is_today_et(iso: str) -> bool:
+    """True if an ISO commence-time falls on the current US-Eastern date."""
+    try:
+        dt = datetime.fromisoformat((iso or "").replace("Z", "+00:00")).astimezone(ESPN_TZ)
+        return dt.date() == datetime.now(ESPN_TZ).date()
+    except (ValueError, TypeError):
+        return False
+
+
+def generate_prop_board(sport_key: str) -> list:
+    """A board of player-prop projections for today's games (100% free data).
+
+    v1 (MLB): each game's probable starting pitchers → a strikeout projection
+    with recent form. No betting line or edge (we have no free prop lines), so
+    the card shows PropJunkie's projection + recent games only — never a
+    fabricated edge or hit-rate. Sorted by projection, highest first.
+    """
+    if sport_key != "baseball_mlb":
+        return []
+    games = [g for g in get_game_lines(sport_key) if _is_today_et(g.get("commence_time"))]
+    if not games:
+        return []
+    sp_map, _ = get_probable_pitchers(sport_key)
+
+    cards, seen = [], set()
+    for g in games:
+        sp = sp_map.get((_norm_team(g["away_team"]), _norm_team(g["home_team"])))
+        if not sp:
+            continue
+        for who, team, opp in (("away", g["away_team"], g["home_team"]),
+                               ("home", g["home_team"], g["away_team"])):
+            name = sp.get(f"{who}_sp_name")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            proj = generate_projection(name, "player_pitcher_strikeouts", sport_key)
+            if proj.get("projection") is None:
+                continue
+            vals = proj.get("recent_values") or []
+            cards.append({
+                "player":         name,
+                "role":           "SP",
+                "market":         "Strikeouts",
+                "market_key":     "player_pitcher_strikeouts",
+                "team":           team,
+                "opponent":       opp,
+                "matchup":        f"{team.split()[-1]} vs {opp.split()[-1]}",
+                "commence_time":  g["commence_time"],
+                "game_id":        g["id"],
+                "projection":     proj["projection"],
+                "recent":         [int(v) if float(v).is_integer() else v for v in vals[-5:]],
+                "l5_avg":         round(sum(vals[-5:]) / len(vals[-5:]), 1) if vals else None,
+                "l10_avg":        round(sum(vals[-10:]) / len(vals[-10:]), 1) if vals else None,
+                "games_used":     proj["games_used"],
+                "low_confidence": proj["low_confidence"],
+                "era":            sp.get(f"{who}_sp_era"),
+            })
+    cards.sort(key=lambda c: c["projection"], reverse=True)
+    return cards
+
+
 # ─────────────────────────────────────────
 # EXAMPLE / DEMO
 # ─────────────────────────────────────────

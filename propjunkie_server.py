@@ -34,7 +34,7 @@ from flask_limiter.util import get_remote_address
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks, fetch_final_scores
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks, generate_prop_board, fetch_final_scores
 from models import db, User, Pick
 from forms import (
     SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
@@ -145,6 +145,12 @@ def lines_page():
 @limiter.exempt
 def slate_page():
     return render_template('slate.html')
+
+
+@app.route('/props', methods=['GET'])
+@limiter.exempt
+def props_page():
+    return render_template('props.html')
 
 
 @app.route('/record', methods=['GET'])
@@ -423,6 +429,30 @@ def game_lines(sport):
         return jsonify(data)
     except Exception:
         logger.exception("Error fetching game lines for %s", sport)
+        return jsonify({'error': _GENERIC_ERROR}), 500
+
+
+# ─────────────────────────────────────────
+# PROP BOARD — player-prop projections (free: projection + recent form only)
+# ─────────────────────────────────────────
+
+_prop_board_cache: dict = {}   # sport → {'data': list, 'ts': float}
+_PROP_BOARD_TTL = 3600         # 1h — projections move slowly, and it's heavy to build
+
+@app.route('/prop-predictions/<sport>', methods=['GET'])
+@limiter.limit("20 per minute")
+def prop_predictions(sport):
+    """GET /prop-predictions/baseball_mlb — today's player-prop projection cards."""
+    now = time.time()
+    cached = _prop_board_cache.get(sport)
+    if cached and (now - cached['ts']) < _PROP_BOARD_TTL:
+        return jsonify(cached['data'])
+    try:
+        data = generate_prop_board(sport)
+        _prop_board_cache[sport] = {'data': data, 'ts': now}
+        return jsonify(data)
+    except Exception:
+        logger.exception("Error generating prop board for %s", sport)
         return jsonify({'error': _GENERIC_ERROR}), 500
 
 

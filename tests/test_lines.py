@@ -54,6 +54,33 @@ class TestSlatePage:
         assert b'href="/app"' in r.data
 
 
+class TestPropBoard:
+    def test_props_page_renders(self, client):
+        r = client.get("/props")
+        assert r.status_code == 200
+        assert b"AI Player Prop Predictions" in r.data
+        assert b'data-sport="baseball_mlb"' in r.data
+        assert b'href="/record"' in r.data
+
+    def test_prop_predictions_cached(self, client, monkeypatch):
+        import propjunkie_server as srv
+        srv._prop_board_cache.clear()
+        calls = {"n": 0}
+
+        def fake(sport):
+            calls["n"] += 1
+            return [{"player": "Ace", "projection": 7.0, "market": "Strikeouts",
+                     "game_id": "g", "matchup": "A vs B", "commence_time": "2026-07-20T23:00Z",
+                     "recent": [7, 8], "l5_avg": 7.5, "l10_avg": 7.5, "games_used": 10,
+                     "low_confidence": False, "role": "SP", "era": 3.0}]
+
+        monkeypatch.setattr(srv, "generate_prop_board", fake)
+        r1 = client.get("/prop-predictions/baseball_mlb")
+        r2 = client.get("/prop-predictions/baseball_mlb")
+        assert r1.status_code == 200 and r2.status_code == 200
+        assert calls["n"] == 1   # second request served from cache
+
+
 class TestLinesCache:
     def test_repeat_requests_hit_api_once(self, client, monkeypatch):
         srv._lines_cache.clear()

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropJunkie — AI Player Prop Predictions</title>
+    <meta property="og:title" content="PropJunkie — AI Player Prop Predictions">
+    <meta property="og:description" content="AI player-prop projections for today's games — built from each player's recent games.">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0c0f0a; --surface: #141a12; --surface2: #1a2218; --border: #1e2a1a;
+            --accent: #c9a84c; --accent-hover: #dbb85c; --accent-glow: rgba(201, 168, 76, 0.15);
+            --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
+            --text: #e8ecf4; --text-2: #b8c8b6; --muted: #4a6a44; --header-bg: rgba(12, 15, 10, 0.95);
+        }
+        html[data-theme="light"] {
+            --bg: #f4f0e8; --surface: #ffffff; --surface2: #ede9e0; --border: #d8d2c4;
+            --accent: #a07c28; --accent-hover: #886618; --accent-glow: rgba(160, 124, 40, 0.12);
+            --green: #166c4a; --red: #b52020; --yellow: #9a5e08;
+            --text: #1a1a14; --text-2: #4a5040; --muted: #7a7255; --header-bg: rgba(244, 240, 232, 0.95);
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+        header { display: flex; align-items: center; justify-content: space-between; padding: 0 32px; height: 60px; border-bottom: 1px solid var(--border); background: var(--header-bg); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 100; }
+        .logo { font-size: 22px; font-weight: 900; color: var(--text); letter-spacing: -0.5px; text-decoration: none; }
+        .logo span { color: var(--accent); }
+        .nav-links { display: flex; align-items: center; gap: 22px; }
+        .nav-link { color: var(--muted); text-decoration: none; font-size: 14px; transition: color 0.15s; }
+        .nav-link:hover { color: var(--text); } .nav-link.active { color: var(--text); }
+        .btn-nav { background: var(--accent); color: #0c0f0a; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; text-decoration: none; }
+        html[data-theme="light"] .btn-nav { color: #fff; }
+        .theme-toggle { background: var(--surface2); border: 1px solid var(--border); border-radius: 22px; padding: 3px; display: flex; align-items: center; cursor: pointer; gap: 1px; }
+        .t-opt { padding: 4px 11px; border-radius: 18px; font-size: 10px; font-weight: 700; color: var(--muted); }
+        .t-opt.active { background: var(--surface); color: var(--text); }
+
+        .container { max-width: 1120px; margin: 0 auto; padding: 28px 24px 60px; }
+        .page-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+        .page-title { font-size: 27px; font-weight: 900; }
+        .how-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 20px; cursor: pointer; }
+        .how-btn:hover { border-color: var(--accent); color: var(--text); }
+        .page-sub { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+
+        /* Sport tabs + filters row */
+        .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+        .sport-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tab { padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; }
+        .tab:hover { border-color: var(--accent); color: var(--text); }
+        .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .tab.soft { opacity: 0.55; cursor: not-allowed; }
+        .spacer { flex: 1; }
+        .sort-wrap { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+        select.sort { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 13px; font-weight: 600; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+
+        /* Scrollable game chips */
+        .game-strip { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+        .chip-scroll { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+        .chip-scroll::-webkit-scrollbar { display: none; }
+        .chip { white-space: nowrap; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+        .chip:hover { border-color: var(--accent); }
+        .chip.active { background: var(--accent-glow); border-color: var(--accent); color: var(--text); }
+        .arrow { flex: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--accent); font-size: 16px; cursor: pointer; display: grid; place-items: center; }
+        .arrow:hover { border-color: var(--accent); }
+
+        /* Count bar */
+        .count-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 18px; margin-bottom: 16px; flex-wrap: wrap; }
+        .count-bar .n { font-size: 16px; font-weight: 800; }
+        .count-bar .n b { color: var(--accent); }
+        .count-bar .sub { font-size: 12px; color: var(--muted); }
+        .btn-pro { background: var(--accent); color: #0c0f0a; border: none; padding: 9px 18px; border-radius: 20px; font-size: 13px; font-weight: 800; cursor: pointer; text-decoration: none; }
+        html[data-theme="light"] .btn-pro { color: #fff; }
+
+        /* Card grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+        .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .p-name { font-size: 16px; font-weight: 800; }
+        .p-role { font-size: 10px; font-weight: 700; color: var(--muted); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+        .p-matchup { font-size: 12px; color: var(--muted); margin-top: 3px; }
+        .p-era { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+        .proj-box { text-align: right; }
+        .proj-label { font-size: 9px; font-weight: 800; letter-spacing: 0.6px; color: var(--muted); text-transform: uppercase; }
+        .proj-num { font-size: 30px; font-weight: 900; color: var(--accent); line-height: 1; }
+        .proj-mkt { font-size: 11px; color: var(--text-2); }
+        .card-mid { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .stat { text-align: center; } .stat .lab { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; color: var(--muted); text-transform: uppercase; } .stat .val { font-size: 14px; font-weight: 800; margin-top: 2px; }
+        .recent { margin-top: 12px; font-size: 12px; color: var(--text-2); } .recent b { color: var(--text); }
+        .thin { color: var(--yellow); font-size: 11px; margin-top: 6px; }
+        .locked-line { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+        /* Locked (Pro) card */
+        .card.locked { position: relative; overflow: hidden; min-height: 200px; display: grid; place-items: center; text-align: center; border-style: dashed; }
+        .card.locked .ghost { position: absolute; inset: 0; opacity: 0.18; filter: blur(5px); pointer-events: none; padding: 16px; }
+        .lock-cta { position: relative; z-index: 2; }
+        .lock-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; color: var(--accent); border: 1px solid var(--accent); border-radius: 20px; padding: 3px 10px; margin-bottom: 10px; }
+        .lock-title { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+        .lock-sub { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+
+        .loading, .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+        .spinner { width: 30px; height: 30px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 14px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .note { margin-top: 22px; font-size: 12px; color: var(--muted); text-align: center; border-top: 1px dashed var(--border); padding-top: 14px; }
+
+        /* How-it-works modal */
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; place-items: center; z-index: 200; padding: 20px; }
+        .modal-bg.open { display: grid; }
+        .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; max-width: 460px; width: 100%; padding: 24px; max-height: 85vh; overflow-y: auto; }
+        .modal h2 { font-size: 18px; margin-bottom: 4px; }
+        .modal .msub { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+        .step { display: flex; gap: 12px; margin-bottom: 14px; }
+        .step .num { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-glow); color: var(--accent); font-weight: 800; font-size: 13px; display: grid; place-items: center; }
+        .step .txt { font-size: 13px; color: var(--text-2); } .step .txt b { color: var(--text); }
+        .modal-close { float: right; background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+        .disc { font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 12px; margin-top: 6px; }
+
+        @media (max-width: 560px) { header { padding: 0 16px; } .nav-links { gap: 12px; } .container { padding: 20px 14px 50px; } }
+    </style>
+</head>
+<body>
+<header>
+    <a href="/" class="logo"><span>Prop</span>Junkie</a>
+    <div class="nav-links">
+        <a href="/lines" class="nav-link">Lines</a>
+        <a href="/slate" class="nav-link">Slate</a>
+        <a href="/props" class="nav-link active">Props</a>
+        <a href="/record" class="nav-link">Record</a>
+        {% if current_user.is_authenticated %}
+        <a href="/account" class="nav-link">Account</a>
+        {% else %}
+        <a href="/login" class="nav-link">Log In</a>
+        {% endif %}
+        <div class="theme-toggle" onclick="toggleTheme()" role="button" aria-label="Toggle theme">
+            <div class="t-opt active" id="tDark">🌙 Dark</div>
+            <div class="t-opt" id="tLight">☀️ Light</div>
+        </div>
+        <a href="/app" class="btn-nav">Analyze →</a>
+    </div>
+</header>
+
+<div class="container">
+    <div class="page-head">
+        <div class="page-title">AI Player Prop Predictions</div>
+        <button class="how-btn" onclick="openHow()">＋ How it works</button>
+    </div>
+    <div class="page-sub">PropJunkie's projection for each player's prop today, built from their recent games. A projection — not a lock.</div>
+
+    <div class="controls">
+        <div class="sport-tabs">
+            <div class="tab active" data-sport="baseball_mlb">⚾ MLB</div>
+            <div class="tab soft" title="In season soon">🏀 NBA</div>
+            <div class="tab soft" title="In season soon">🏈 NFL</div>
+            <div class="tab soft" title="In season soon">🏒 NHL</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="sort-wrap">Sort
+            <select class="sort" id="sortSel" onchange="render()">
+                <option value="proj">Projection</option>
+                <option value="l5">Recent form (L5)</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="game-strip">
+        <div class="arrow" onclick="scrollChips(-1)">‹</div>
+        <div class="chip-scroll" id="chipScroll"></div>
+        <div class="arrow" onclick="scrollChips(1)">›</div>
+    </div>
+
+    <div class="count-bar" id="countBar" style="display:none">
+        <div>
+            <div class="n">Showing <b id="shownN">0</b> of <span id="totalN">0</span> projections today</div>
+            <div class="sub" id="lockSub"></div>
+        </div>
+        <a href="/app" class="btn-pro" id="unlockAll">Unlock all →</a>
+    </div>
+
+    <div id="board"><div class="loading"><div class="spinner"></div>Loading projections…</div></div>
+
+    <div class="note">Projections come from each player's recent games (free public data). Lines, edge %, and hit-rate history unlock with the Pro tier. For entertainment only — 21+, please gamble responsibly.</div>
+</div>
+
+<!-- How it works modal -->
+<div class="modal-bg" id="howModal" onclick="if(event.target===this)closeHow()">
+    <div class="modal">
+        <button class="modal-close" onclick="closeHow()">×</button>
+        <h2>How to use PropJunkie</h2>
+        <div class="msub">Find your own edges in under a minute.</div>
+        <div class="step"><div class="num">1</div><div class="txt">Pick a <b>sport</b> and tap a <b>game</b> in the strip to filter the board.</div></div>
+        <div class="step"><div class="num">2</div><div class="txt">Read PropJunkie's <b>projection</b> for each player's prop — it's built from that player's recent games, weighted to recent form.</div></div>
+        <div class="step"><div class="num">3</div><div class="txt">Compare it to the <b>line at your sportsbook</b>. If we project clearly above or below the line, that's your lean.</div></div>
+        <div class="step"><div class="num">4</div><div class="txt">Check <b>recent form</b> (last 5 games) and sample size for context — a thin sample is flagged.</div></div>
+        <div class="step"><div class="num">5</div><div class="txt">Want the full breakdown on one prop? Open the <b>Analyzer</b> to generate a projection and edge against a line you enter.</div></div>
+        <div class="disc">A projection is a guide, not a guarantee. For informational &amp; entertainment purposes only. Must be 21+ where required. Please gamble responsibly.</div>
+    </div>
+</div>
+
+<script>
+    const API = '';
+    let cards = [];
+    let selectedGame = 'all';
+    let selectedSport = 'baseball_mlb';
+    const FREE_COUNT = 3;   // free-tier cards shown; the rest are Pro-locked
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const next = html.getAttribute('data-theme') !== 'light' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next); localStorage.setItem('pj-theme', next);
+        document.getElementById('tDark').classList.toggle('active', next === 'dark');
+        document.getElementById('tLight').classList.toggle('active', next === 'light');
+    }
+    (function () { const s = localStorage.getItem('pj-theme') || 'dark'; document.documentElement.setAttribute('data-theme', s);
+        document.getElementById('tDark').classList.toggle('active', s === 'dark'); document.getElementById('tLight').classList.toggle('active', s === 'light'); })();
+
+    function openHow() { document.getElementById('howModal').classList.add('open'); }
+    function closeHow() { document.getElementById('howModal').classList.remove('open'); }
+    function scrollChips(dir) { document.getElementById('chipScroll').scrollBy({ left: dir * 260, behavior: 'smooth' }); }
+
+    function gameTime(iso) {
+        const d = new Date(iso); d.setMinutes(Math.round(d.getMinutes() / 5) * 5, 0, 0);
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    function fmt(v) { return (v == null) ? '—' : v; }
+
+    function buildChips() {
+        const seen = new Map();
+        for (const c of cards) if (!seen.has(c.game_id)) seen.set(c.game_id, c);
+        let html = `<div class="chip ${selectedGame === 'all' ? 'active' : ''}" onclick="pickGame('all')">All games</div>`;
+        for (const [gid, c] of seen) {
+            html += `<div class="chip ${selectedGame === gid ? 'active' : ''}" onclick="pickGame('${gid}')">${c.matchup} · ${gameTime(c.commence_time)}</div>`;
+        }
+        document.getElementById('chipScroll').innerHTML = html;
+    }
+    function pickGame(gid) { selectedGame = gid; buildChips(); render(); }
+
+    function card(c) {
+        const recent = (c.recent || []).join(', ');
+        return `
+        <div class="card">
+          <div class="card-top">
+            <div>
+              <div class="p-name">${c.player}<span class="p-role">${c.role}</span></div>
+              <div class="p-matchup">${c.matchup} · ${gameTime(c.commence_time)}</div>
+              ${c.era != null ? `<div class="p-era">Season ERA ${c.era.toFixed ? c.era.toFixed(2) : c.era}</div>` : ''}
+            </div>
+            <div class="proj-box">
+              <div class="proj-label">Projection</div>
+              <div class="proj-num">${c.projection}</div>
+              <div class="proj-mkt">${c.market}</div>
+            </div>
+          </div>
+          <div class="card-mid">
+            <div class="stat"><div class="lab">L5 avg</div><div class="val">${fmt(c.l5_avg)}</div></div>
+            <div class="stat"><div class="lab">L10 avg</div><div class="val">${fmt(c.l10_avg)}</div></div>
+            <div class="stat"><div class="lab">Games</div><div class="val">${c.games_used}</div></div>
+          </div>
+          ${recent ? `<div class="recent"><b>Last ${(c.recent||[]).length}:</b> ${recent}</div>` : ''}
+          ${c.low_confidence ? `<div class="thin">⚠ thin sample — take with caution</div>` : ''}
+          <div class="locked-line">🔒 Line, edge % &amp; hit-rate history unlock with Pro</div>
+        </div>`;
+    }
+
+    function lockedCard(c) {
+        return `
+        <div class="card locked">
+          <div class="ghost">${card(c)}</div>
+          <div class="lock-cta">
+            <div class="lock-badge">🔒 PRO</div>
+            <div class="lock-title">Unlock the Pro Tier</div>
+            <div class="lock-sub">See every projection on today's board.</div>
+            <a href="/app" class="btn-pro">Go Pro — Unlock All</a>
+          </div>
+        </div>`;
+    }
+
+    function render() {
+        const board = document.getElementById('board');
+        let list = cards.slice();
+        if (selectedGame !== 'all') list = list.filter(c => c.game_id === selectedGame);
+        const sort = document.getElementById('sortSel').value;
+        list.sort((a, b) => sort === 'l5' ? (b.l5_avg || 0) - (a.l5_avg || 0) : b.projection - a.projection);
+
+        if (!list.length) { board.innerHTML = `<div class="empty">No projections for this selection yet.</div>`; return; }
+
+        document.getElementById('countBar').style.display = 'flex';
+        const free = Math.min(FREE_COUNT, list.length);
+        document.getElementById('shownN').textContent = free;
+        document.getElementById('totalN').textContent = list.length;
+        const locked = list.length - free;
+        document.getElementById('lockSub').textContent = locked > 0 ? `Free tier · ${locked} projection${locked === 1 ? '' : 's'} locked` : 'Free tier';
+
+        board.innerHTML = `<div class="grid">${
+            list.map((c, i) => i < free ? card(c) : lockedCard(c)).join('')
+        }</div>`;
+    }
+
+    async function load(sport) {
+        const board = document.getElementById('board');
+        board.innerHTML = `<div class="loading"><div class="spinner"></div>Loading projections…</div>`;
+        try {
+            const res = await fetch(`${API}/prop-predictions/${sport}`);
+            const data = await res.json();
+            cards = Array.isArray(data) ? data : [];
+            if (!cards.length) { board.innerHTML = `<div class="empty">No games with projections today. Check back closer to game time.</div>`; document.getElementById('countBar').style.display = 'none'; buildChips(); return; }
+            buildChips(); render();
+        } catch (e) {
+            board.innerHTML = `<div class="empty">Couldn't load projections right now. Try refreshing.</div>`;
+        }
+    }
+
+    document.querySelectorAll('.tab:not(.soft)').forEach(t => t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active'); selectedSport = t.dataset.sport; selectedGame = 'all'; load(selectedSport);
+    }));
+
+    load(selectedSport);
+</script>
+</body>
+</html>
