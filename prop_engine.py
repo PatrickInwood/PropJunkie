@@ -522,6 +522,14 @@ MARKET_ESPN_MAP = {
     'player_batter_runs_scored':      ('batting',   [' r ', 'runs', 'runsscored'],              'runs scored'),
     'player_batter_stolen_bases':     ('batting',   ['stolenbases', 'sb', ' sb '],              'stolen bases'),
     'player_pitcher_hits_allowed':    ('pitching',  [' h ', 'hits', 'hitsallowed'],             'hits allowed'),
+    'player_batter_singles':          ('batting',   ['singles', '1b'],                          'singles'),
+    'player_batter_doubles':          ('batting',   ['doubles', '2b'],                          'doubles'),
+    'player_batter_triples':          ('batting',   ['triples', '3b'],                          'triples'),
+    'player_batter_walks':            ('batting',   ['walks', 'bb', 'baseonballs'],             'walks'),
+    'player_batter_strikeouts':       ('batting',   ['strikeouts', 'so', ' k'],                 'strikeouts'),
+    'player_hits_runs_rbis':          ('batting',   ['hits'],                                   'hits + runs + RBIs'),
+    'player_pitcher_walks_allowed':   ('pitching',  ['walks', 'bb', 'baseonballs'],             'walks allowed'),
+    'player_pitcher_earned_runs':     ('pitching',  ['earnedruns', 'er'],                       'earned runs'),
     'player_shots_on_goal':           ('skating',   ['shots', 'sog'],                           'shots'),
     'player_goals':                   ('skating',   ['goals', ' g '],                           'goals'),
 }
@@ -684,17 +692,43 @@ def fetch_espn_defense_context(
 
 MLB_STATS_BASE = "https://statsapi.mlb.com/api/v1"
 
-# market_key → (statsapi stat group, per-game stat field)
+# market_key → (statsapi stat group, spec). spec is a field name, a tuple of
+# fields to SUM (e.g. hits+runs+RBIs), or "SINGLES" (derived: H − 2B − 3B − HR).
 MLB_STAT_MAP = {
+    # Batting
     "player_batter_hits":          ("hitting", "hits"),
     "player_batter_total_bases":   ("hitting", "totalBases"),
     "player_batter_home_runs":     ("hitting", "homeRuns"),
     "player_batter_rbis":          ("hitting", "rbi"),
     "player_batter_runs_scored":   ("hitting", "runs"),
+    "player_batter_singles":       ("hitting", "SINGLES"),
+    "player_batter_doubles":       ("hitting", "doubles"),
+    "player_batter_triples":       ("hitting", "triples"),
+    "player_batter_walks":         ("hitting", "baseOnBalls"),
     "player_batter_stolen_bases":  ("hitting", "stolenBases"),
+    "player_batter_strikeouts":    ("hitting", "strikeOuts"),
+    "player_hits_runs_rbis":       ("hitting", ("hits", "runs", "rbi")),
+    # Pitching
     "player_pitcher_strikeouts":   ("pitching", "strikeOuts"),
     "player_pitcher_hits_allowed": ("pitching", "hits"),
+    "player_pitcher_outs":         ("pitching", "outs"),
+    "player_pitcher_walks_allowed":("pitching", "baseOnBalls"),
+    "player_pitcher_earned_runs":  ("pitching", "earnedRuns"),
 }
+
+
+def _mlb_stat_value(stat: dict, spec):
+    """Read one per-game value from a statsapi split, handling derived specs."""
+    if spec == "SINGLES":
+        parts = [stat.get(k) for k in ("hits", "doubles", "triples", "homeRuns")]
+        if any(p is None for p in parts):
+            return None
+        h, d, t, hr = parts
+        return h - d - t - hr
+    if isinstance(spec, tuple):
+        parts = [stat.get(k) for k in spec]
+        return sum(parts) if all(p is not None for p in parts) else None
+    return stat.get(spec)
 
 
 def fetch_recent_stat_values(player_name: str, market_key: str, sport_key: str,
@@ -715,7 +749,7 @@ def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
         mapping = MLB_STAT_MAP.get(market_key)
         if not mapping:
             return []
-        group, field = mapping
+        group, spec = mapping
 
         # 1. Resolve the player's MLB id by name
         r = requests.get(f"{MLB_STATS_BASE}/people/search",
@@ -741,7 +775,7 @@ def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
         # 3. Pull the per-game value (splits are already oldest → newest)
         values = []
         for s in splits:
-            v = s.get("stat", {}).get(field)
+            v = _mlb_stat_value(s.get("stat", {}), spec)
             if v is not None:
                 try:
                     values.append(float(v))
@@ -971,12 +1005,20 @@ STD_DEV_DEFAULTS = {
     ("baseball_mlb", "player_pitcher_strikeouts"):         0.30,
     ("baseball_mlb", "player_pitcher_outs"):               0.28,
     ("baseball_mlb", "player_pitcher_hits_allowed"):       0.35,
+    ("baseball_mlb", "player_pitcher_walks_allowed"):      0.60,
+    ("baseball_mlb", "player_pitcher_earned_runs"):        0.75,
     # MLB — batters (rare events = high variance)
     ("baseball_mlb", "player_batter_home_runs"):           0.90,
     ("baseball_mlb", "player_batter_hits"):                0.45,
     ("baseball_mlb", "player_batter_total_bases"):         0.50,
+    ("baseball_mlb", "player_hits_runs_rbis"):             0.45,
     ("baseball_mlb", "player_batter_rbis"):                0.70,
     ("baseball_mlb", "player_batter_runs_scored"):         0.65,
+    ("baseball_mlb", "player_batter_singles"):             0.60,
+    ("baseball_mlb", "player_batter_doubles"):             0.85,
+    ("baseball_mlb", "player_batter_triples"):             0.95,
+    ("baseball_mlb", "player_batter_walks"):               0.70,
+    ("baseball_mlb", "player_batter_strikeouts"):          0.45,
     ("baseball_mlb", "player_batter_stolen_bases"):        0.80,
     # NHL
     ("icehockey_nhl", "player_shots_on_goal"):             0.35,
@@ -1824,8 +1866,11 @@ def generate_prop_board(sport_key: str) -> list:
             if proj.get("projection") is None:
                 continue
             vals = proj.get("recent_values") or []
+            pid = sp.get(f"{who}_sp_id")
             cards.append({
                 "player":         name,
+                "headshot":       (f"https://midfield.mlbstatic.com/v1/people/{pid}/spots/120"
+                                   if pid else None),
                 "role":           "SP",
                 "market":         "Strikeouts",
                 "market_key":     "player_pitcher_strikeouts",

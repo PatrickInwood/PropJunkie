@@ -148,7 +148,7 @@ class TestFetchMLBValues:
 
     def test_unsupported_mlb_market_returns_empty(self):
         # Not in MLB_STAT_MAP → short-circuits before any network call.
-        assert pe.fetch_recent_stat_values("X", "player_batter_doubles", "baseball_mlb") == []
+        assert pe.fetch_recent_stat_values("X", "player_batter_not_a_market", "baseball_mlb") == []
 
 
 # ── MLB analysis context (routes through the Stats API, not ESPN) ─────
@@ -168,7 +168,7 @@ class TestMLBPlayerContext:
         assert pe.fetch_espn_player_context("X", "player_batter_hits", "baseball_mlb") == ""
 
     def test_mlb_unsupported_market_returns_empty(self):
-        assert pe.fetch_espn_player_context("X", "player_batter_doubles", "baseball_mlb") == ""
+        assert pe.fetch_espn_player_context("X", "player_batter_not_a_market", "baseball_mlb") == ""
 
 
 # ── /generate-projection route ───────────────────────────────────────

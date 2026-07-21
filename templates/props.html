@@ -77,6 +77,8 @@
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
         .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
         .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .p-left { display: flex; gap: 11px; align-items: flex-start; }
+        .headshot { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; object-position: top; border: 1px solid var(--border); background: var(--surface2); flex: none; }
         .p-name { font-size: 16px; font-weight: 800; }
         .p-role { font-size: 10px; font-weight: 700; color: var(--muted); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
         .p-matchup { font-size: 12px; color: var(--muted); margin-top: 3px; }
@@ -240,10 +242,13 @@
         return `
         <div class="card">
           <div class="card-top">
-            <div>
-              <div class="p-name">${c.player}<span class="p-role">${c.role}</span></div>
-              <div class="p-matchup">${c.matchup} · ${gameTime(c.commence_time)}</div>
-              ${c.era != null ? `<div class="p-era">Season ERA ${c.era.toFixed ? c.era.toFixed(2) : c.era}</div>` : ''}
+            <div class="p-left">
+              ${c.headshot ? `<img class="headshot" src="${c.headshot}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+              <div>
+                <div class="p-name">${c.player}<span class="p-role">${c.role}</span></div>
+                <div class="p-matchup">${c.matchup} · ${gameTime(c.commence_time)}</div>
+                ${c.era != null ? `<div class="p-era">Season ERA ${c.era.toFixed ? c.era.toFixed(2) : c.era}</div>` : ''}
+              </div>
             </div>
             <div class="proj-box">
               <div class="proj-label">Projection</div>
