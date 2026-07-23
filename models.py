@@ -163,6 +163,7 @@ class Pick(db.Model):
     pick = db.Column(db.String(80))          # human label, e.g. "Under 9.0"
     side = db.Column(db.String(8))           # 'over'|'under'|'home'|'away' (for grading)
     line = db.Column(db.Float)               # totals line (null for moneyline)
+    odds = db.Column(db.Float)               # American odds of the picked side (for ROI)
     model_value = db.Column(db.Float)        # projected total, or model win prob
     edge = db.Column(db.Float)
     created_at = db.Column(
@@ -202,6 +203,20 @@ class Pick(db.Model):
             home_won = home_score > away_score
             won = home_won if self.side == "home" else not home_won
         return "win" if won else "loss"
+
+    def units(self):
+        """Profit/loss in units for a flat 1-unit bet at this pick's odds.
+
+        Win at American odds O → +O/100 (dog) or +100/|O| (favorite); loss → −1;
+        push → 0. Returns None if we don't have the odds (can't compute).
+        """
+        if self.odds is None or self.result is None:
+            return None
+        if self.result == "push":
+            return 0.0
+        if self.result == "loss":
+            return -1.0
+        return (self.odds / 100.0) if self.odds > 0 else (100.0 / abs(self.odds))
 
     def __repr__(self) -> str:
         return f"<Pick {self.sport} {self.market} {self.pick} result={self.result}>"

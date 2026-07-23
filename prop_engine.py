@@ -1751,6 +1751,7 @@ def generate_game_picks(sport_key: str) -> dict:
                     "side":  side.lower(),
                     "model": round(proj_total, 1),
                     "line":  line,
+                    "odds":  totals.get("over_odds") if side == "Over" else totals.get("under_odds"),
                     "edge":  round(abs(diff), 1),
                     "unit":  cfg["unit"],
                 }
@@ -1774,6 +1775,7 @@ def generate_game_picks(sport_key: str) -> dict:
                     "pick":         f"{team.split()[-1]} {sign}{shown_line}",
                     "side":         side,
                     "line":         home_line,   # store home_line; grading is home-relative
+                    "odds":         spreads.get("home_odds") if side == "home" else spreads.get("away_odds"),
                     "model_margin": round(proj["proj_margin"], 1),
                     "edge":         round(abs(cover_edge), 1),
                     "unit":         cfg["unit"],
@@ -1796,6 +1798,7 @@ def generate_game_picks(sport_key: str) -> dict:
                     entry["h2h"] = {
                         "pick":        f"{g['home_team'].split()[-1]} ML",
                         "side":        "home",
+                        "odds":        h2h["home"],
                         "model_prob":  round(blended_home, 3),
                         "market_prob": round(mkt_home, 3),
                         "edge":        round(home_edge * 100, 1),
@@ -1804,6 +1807,7 @@ def generate_game_picks(sport_key: str) -> dict:
                     entry["h2h"] = {
                         "pick":        f"{g['away_team'].split()[-1]} ML",
                         "side":        "away",
+                        "odds":        h2h["away"],
                         "model_prob":  round(1 - blended_home, 3),
                         "market_prob": round(mkt_away, 3),
                         "edge":        round(away_edge * 100, 1),

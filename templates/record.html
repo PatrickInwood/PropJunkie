@@ -55,6 +55,11 @@
         .headline .wl { font-size:44px; font-weight:900; letter-spacing:-1px; }
         .headline .pct { font-size:28px; font-weight:800; color:var(--accent); }
         .headline .sub { color:var(--muted); font-size:13px; margin-left:auto; text-align:right; }
+        .headline .roi { font-size:24px; font-weight:800; }
+        .roi.pos, .card-roi.pos { color:var(--green); }
+        .roi.neg, .card-roi.neg { color:var(--red); }
+        .card-roi { font-size:11px; font-weight:700; margin-top:6px; }
+        .smallnote { font-size:12px; color:var(--muted); margin:-10px 0 22px; line-height:1.5; }
 
         /* Stat grid */
         .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:28px; }
@@ -138,10 +143,18 @@
         return `${r.wins}-${r.losses}${p}`;
     }
     function pct(r){ return (r && r.win_pct!=null) ? `${r.win_pct}%` : '—'; }
+    function unitsStr(r){
+        if(!r || r.units==null) return '';
+        const u = (r.units>=0?'+':'') + r.units + 'u';
+        const roi = (r.roi>=0?'+':'') + r.roi + '%';
+        return `${u} · ${roi} ROI`;
+    }
 
     function statCard(label, r){
+        const ru = (r && r.units!=null)
+            ? `<div class="card-roi ${r.units>=0?'pos':'neg'}">${unitsStr(r)}</div>` : '';
         return `<div class="stat-card"><div class="label">${label}</div>
-            <div class="val">${rec(r)}<span class="p">${pct(r)}</span></div></div>`;
+            <div class="val">${rec(r)}<span class="p">${pct(r)}</span></div>${ru}</div>`;
     }
 
     async function load(){
@@ -158,12 +171,16 @@
         }
 
         const o = d.overall;
+        const roiHead = (o.units!=null)
+            ? `<span class="roi ${o.units>=0?'pos':'neg'}">${unitsStr(o)}</span>` : '';
         let html = `
           <div class="headline">
             <span class="wl">${rec(o)}</span>
             <span class="pct">${pct(o)}</span>
+            ${roiHead}
             <span class="sub">${d.graded} leans graded${d.pending?` · ${d.pending} pending`:''}</span>
           </div>
+          ${o.units!=null && o.priced<20 ? `<div class="smallnote">ROI is on ${o.priced} graded lean${o.priced===1?'':'s'} with recorded odds, at a flat 1 unit each — an early, small sample. Break-even is ~52.4% at −110.</div>` : ''}
           <div class="stat-grid">
             ${statCard('Last 10', d.last10)}
             ${statCard('Moneyline', d.moneyline)}

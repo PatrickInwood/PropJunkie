@@ -22,6 +22,7 @@ Run in production (Railway):
 """
 
 import os
+import sys
 import time
 import logging
 import threading
@@ -105,6 +106,20 @@ def load_user(user_id):
 # creates tables that don't already exist, and never drops or alters data.
 with app.app_context():
     db.create_all()
+    # Lightweight migration: create_all() won't add columns to an existing table,
+    # so add the picks.odds column (for ROI) if it isn't there yet.
+    try:
+        dialect = db.engine.dialect.name
+        if dialect == "postgresql":
+            db.session.execute(db.text("ALTER TABLE picks ADD COLUMN IF NOT EXISTS odds DOUBLE PRECISION"))
+        else:  # sqlite has no IF NOT EXISTS — check the schema first
+            cols = [r[1] for r in db.session.execute(db.text("PRAGMA table_info(picks)"))]
+            if "odds" not in cols:
+                db.session.execute(db.text("ALTER TABLE picks ADD COLUMN odds FLOAT"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("picks.odds column migration failed")
 
 # ─────────────────────────────────────────
 # RATE LIMITING
@@ -517,6 +532,7 @@ def _snapshot_picks(sport, picks):
                     commence_time=_parse_commence(e.get("commence")),
                     home_team=e.get("home"), away_team=e.get("away"),
                     pick=m.get("pick"), side=m.get("side"), line=m.get("line"),
+                    odds=m.get("odds"),
                     model_value=m.get(model_val[market]),
                     edge=m.get("edge"),
                 ))
@@ -576,8 +592,15 @@ def _record_from(picks):
     l = sum(1 for p in picks if p.result == "loss")
     push = sum(1 for p in picks if p.result == "push")
     decided = w + l
+    # Units / ROI over the graded picks that carry odds (a flat 1-unit bet each).
+    # Picks snapshotted before odds were tracked are excluded from ROI.
+    with_odds = [p for p in picks if p.odds is not None and p.units() is not None]
+    units = sum(p.units() for p in with_odds)
+    roi = round(100 * units / len(with_odds), 1) if with_odds else None
     return {"wins": w, "losses": l, "pushes": push,
-            "win_pct": round(100 * w / decided, 1) if decided else None}
+            "win_pct": round(100 * w / decided, 1) if decided else None,
+            "units": round(units, 2) if with_odds else None,
+            "roi": roi, "priced": len(with_odds)}
 
 
 @app.route('/model-record', methods=['GET'])
@@ -870,6 +893,30 @@ def create_checkout():
     except Exception:
         logger.exception("Error creating checkout session")
         return jsonify({'error': _GENERIC_ERROR}), 500
+
+
+# ─────────────────────────────────────────
+# BACKGROUND GRADER
+# Grade finished games on a timer so the record isn't only updated when someone
+# happens to load /record. Runs in-process (fine for Railway); grading is
+# idempotent, so the mild redundancy across gunicorn workers is harmless.
+# ─────────────────────────────────────────
+
+def _background_grader(interval=1800):
+    time.sleep(60)   # let the app settle after boot
+    while True:
+        try:
+            with app.app_context():
+                _grade_pending_picks()
+        except Exception:
+            logger.exception("Background grader run failed")
+        time.sleep(interval)
+
+
+# Don't start the thread under pytest (it would make live network calls); it
+# runs in local dev and in production (gunicorn imports this module).
+if "pytest" not in sys.modules:
+    threading.Thread(target=_background_grader, name="pick-grader", daemon=True).start()
 
 
 # ─────────────────────────────────────────

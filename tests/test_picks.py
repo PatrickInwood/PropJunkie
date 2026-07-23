@@ -6,6 +6,8 @@ cleared per-test for isolation, and score/pick generation is monkeypatched.
 
 from datetime import datetime, timezone, timedelta
 
+import pytest
+
 import propjunkie_server as srv
 from models import db, Pick
 
@@ -43,12 +45,20 @@ class TestPickGrading:
         push = Pick(market="spreads", side="home", line=-2.0)
         assert push.grade(5, 3) == "push"   # margin +2 == 2.0
 
+    def test_units_math(self):
+        assert Pick(result="win", odds=120).units() == pytest.approx(1.2)     # dog
+        assert Pick(result="win", odds=-110).units() == pytest.approx(100 / 110)  # favorite
+        assert Pick(result="loss", odds=-110).units() == -1.0
+        assert Pick(result="push", odds=-110).units() == 0.0
+        assert Pick(result="win", odds=None).units() is None                  # no odds → n/a
+
 
 class TestSnapshotAndRecord:
     def _picks_payload(self, commence):
         return {"g1": {
-            "totals": {"pick": "Under 9.0", "side": "under", "line": 9.0, "model": 7.0, "edge": 2.0},
-            "h2h":    {"pick": "Yankees ML", "side": "home", "model_prob": 0.55,
+            "totals": {"pick": "Under 9.0", "side": "under", "line": 9.0, "odds": -110,
+                       "model": 7.0, "edge": 2.0},
+            "h2h":    {"pick": "Yankees ML", "side": "home", "odds": 120, "model_prob": 0.55,
                        "market_prob": 0.5, "edge": 5.0},
             "home": "New York Yankees", "away": "Boston Red Sox",
             "commence": commence, "min_games": 12,
@@ -81,6 +91,10 @@ class TestSnapshotAndRecord:
         assert rec["total"]["wins"] == 1 and rec["total"]["losses"] == 0
         assert rec["moneyline"]["losses"] == 1 and rec["moneyline"]["wins"] == 0
         assert rec["overall"]["win_pct"] == 50.0
+        # Units: Under win at -110 (+0.909u) + Yankees ML loss at +120 (-1u) = -0.09u
+        assert rec["overall"]["priced"] == 2
+        assert rec["overall"]["units"] == pytest.approx(-0.09, abs=0.01)
+        assert rec["overall"]["roi"] == pytest.approx(-4.5, abs=0.5)
 
     def test_record_data_has_by_sport_and_history(self, client, monkeypatch):
         _clear_picks()
