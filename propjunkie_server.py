@@ -49,7 +49,19 @@ from tokens import (
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# Are we running on the real site? (Railway injects these.) Used to turn on
+# HTTPS-only cookies and HSTS without breaking local http://localhost dev.
+IS_PRODUCTION = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("DATABASE_URL"))
+
+# CORS: the front end is served by THIS app, so every fetch is same-origin and
+# needs no CORS at all. A bare CORS(app) reflects any Origin, which would let
+# any website call our endpoints from a visitor's browser (including the paid
+# Claude analysis). Restrict it to our own origins.
+CORS(app, origins=[
+    "https://propjunkie.app",
+    "https://www.propjunkie.app",
+])
 
 logger = logging.getLogger("propjunkie")
 
@@ -73,6 +85,19 @@ if not _secret_key:
     _secret_key = "dev-insecure-change-me"  # local development only
 app.config["SECRET_KEY"] = _secret_key
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Cookie hardening. HttpOnly keeps JavaScript (and therefore an XSS payload)
+# from reading the session cookie; SameSite=Lax stops other sites sending it on
+# cross-site POSTs; Secure means it's only ever sent over HTTPS (production
+# only, so local http://localhost development still works).
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=IS_PRODUCTION,
+    REMEMBER_COOKIE_HTTPONLY=True,
+    REMEMBER_COOKIE_SAMESITE="Lax",
+    REMEMBER_COOKIE_SECURE=IS_PRODUCTION,
+)
 
 # In production Railway injects DATABASE_URL. Locally it's blank, so we fall
 # back to a SQLite file (a simple, zero-setup database stored on disk).
@@ -132,6 +157,68 @@ limiter = Limiter(
     default_limits=["60 per minute"],
     storage_uri="memory://",
 )
+
+
+# ─────────────────────────────────────────
+# SECURITY HEADERS
+# Sent on every response. These are the browser-side defences: stop the site
+# being framed (clickjacking), stop MIME-sniffing, limit referrer leakage, and
+# constrain where scripts/styles/images may load from.
+# ─────────────────────────────────────────
+
+# Everything the pages legitimately load. All our JS is inline (no external
+# script files), which is why 'unsafe-inline' is needed for script-src — the
+# policy still blocks *external* script sources, framing, and form hijacking.
+_CSP = "; ".join([
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "object-src 'none'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    # team logos (ESPN) and player headshots (MLB)
+    "img-src 'self' data: https://a.espncdn.com https://midfield.mlbstatic.com https://img.mlbstatic.com",
+    "connect-src 'self'",
+])
+
+
+# The HTML form POSTs (login/signup/etc.) carry CSRF tokens via Flask-WTF, but
+# the JSON API endpoints don't — and two of them cost real money (Claude
+# analysis) or touch checkout. Browsers always send Origin on a cross-origin
+# POST, so rejecting a mismatched Origin blocks another site from driving these
+# with a visitor's browser. Requests with no Origin (curl, our own tests) pass.
+_GUARDED_POST_PATHS = ("/analyze-prop", "/scan-props", "/generate-projection",
+                       "/create-checkout")
+
+
+@app.before_request
+def _block_cross_site_api_posts():
+    if request.method != "POST" or not request.path.startswith(_GUARDED_POST_PATHS):
+        return None
+    origin = request.headers.get("Origin")
+    if not origin:
+        return None
+    allowed = {"propjunkie.app", "www.propjunkie.app", (request.host or "").lower()}
+    if urlparse(origin).netloc.lower() not in allowed:
+        logger.warning("Blocked cross-site POST to %s from %s", request.path, origin)
+        return jsonify({"error": "Cross-site requests are not allowed."}), 403
+    return None
+
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy",
+                            "geolocation=(), microphone=(), camera=(), payment=()")
+    resp.headers.setdefault("Content-Security-Policy", _CSP)
+    if IS_PRODUCTION:   # HSTS only makes sense over HTTPS
+        resp.headers.setdefault("Strict-Transport-Security",
+                                "max-age=31536000; includeSubDomains")
+    return resp
 
 
 # ─────────────────────────────────────────
@@ -925,5 +1012,9 @@ if "pytest" not in sys.modules:
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
+    # Flask's debug mode exposes an interactive debugger that can execute
+    # arbitrary code — never on by default, and never in production. Opt in
+    # locally with FLASK_DEBUG=1.
+    debug = os.getenv("FLASK_DEBUG") == "1" and not IS_PRODUCTION
     print(f"PropJunkie API running on http://localhost:{port}")
-    app.run(port=port, debug=True)
+    app.run(port=port, debug=debug)
