@@ -6,13 +6,13 @@
 > **Everything here is a DRAFT for Patrick to review and post himself. Nothing auto-posts.**
 > Wherever you see a `[BRACKET]`, that's a live value to fill in from `/slate` or `/record` at post time — never invent a matchup, line, edge, or hit-rate. If you don't have a real number, sell the transparency, not a stat.
 
-> **🚦 LAUNCH TRIGGER — don't post Day 1 until `/record` shows ~15–20 graded leans (≈10–14 days of the model running in mid-July MLB).** The model grades finished games automatically whether or not we post, so the record is already building now. Days are numbered *relative to launch*, not calendar-locked, so a later start just shifts the whole sequence forward intact — and the Day 14/21/28 milestone posts land on real W-L numbers instead of the fallback. Soft pre-launch is fine in the meantime (methodology/mechanism posts with no stats, plus data-backed replies on X).
+> **🚦 LAUNCH TRIGGER — MET (as of 2026-08-01).** `/record` now shows **92 graded leans** (well past the ~15–20 threshold), so there is a substantive, real record to point at. **GO for launch.** But read the **Record framing** rule below before posting anything with a number in it — the record is currently *honest but unprofitable* (57.1% win / **−9.0% ROI**), and how we frame that is the difference between a trust asset and a self-inflicted credibility wound. Days are numbered *relative to launch*, not calendar-locked.
 
-> **Seasonal note (mid-July):** MLB is the only live league right now (NBA/NHL offseason, NFL preseason starts early August). So the daily-lean content in this window is MLB, which makes the **starting-pitcher-ERA** angle timely and on-brand. When NFL preseason opens late in the window, layer it in.
+> **Seasonal note (early August):** MLB is the live league; NFL preseason is opening now — layer it in as it ramps. The **starting-pitcher-ERA** angle stays timely for MLB content in this window.
 
 ---
 
-## Compliance — the two disclaimers (never ship a pick post without one)
+## Compliance — the disclaimers (never ship a pick post without one)
 
 - **Full (X longform, IG captions, Reddit):**
   *For informational & entertainment purposes only. Must be 18+ (21+ where required) and in a jurisdiction where sports betting is legal. Please gamble responsibly.*
@@ -20,6 +20,21 @@
   *21+. For entertainment. Gamble responsibly.*
 
 Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win rates, real leans and real `/record` numbers only, never imply betting is income, TikTok framed 21+.
+
+---
+
+## Compliance — Record framing (the ROI truth) — READ BEFORE ANY POST WITH A NUMBER
+
+The model's real record right now: **52-39-1 · 57.1% win · −9.0% ROI (−4.16 units on 46 priced picks) · 92 graded, 45 pending.** By market: Moneyline 18-16 (−17.3% ROI) · Total 23-21-1 (−21.9% ROI) · Spread 11-2 (+43% ROI, but only ~8 priced — small-sample noise).
+
+**The trap:** "57% win rate" is factually true and looks like a winning system. It is not one — we *know*, from our own ROI tracking, the model is currently down money because it wins at bad prices. Leading with the win rate alone would imply "follow this and profit," which is false, and the `/record` page one tap away shows the ROI in **red** — the marketing would contradict the product and torch the exact trust we sell.
+
+**The rules:**
+1. **Never show the win rate alone.** If a graphic or post cites 57.1% / the W-L, it must show the **−9.0% ROI right next to it.** Both numbers, always, everywhere.
+2. **Never cherry-pick.** Do not headline Spread's 11-2 / +43% (small-sample noise) or the +7.4% last-10. Isolating the flattering split is exactly the tout behavior we condemn — and it's dishonest.
+3. **The −9% is an asset when we own it, a liability only if we hide it.** Frame it as the proof of the thesis: *a win rate without the price is a screenshot; we show you the money too because the money is the only honest scoreboard.* This is a teaching moment (win rate ≠ ROI) that positions us as the smart, honest voice — and no tout will ever match it.
+4. **Do not imply the model beats the market.** It currently does not. Sell the *mechanism* (humble, market-anchored, pitcher-ERA-aware) and the *transparency* (publicly graded, auditable), never the performance.
+5. **Break-even literacy:** at −110 you need ~52.4% just to break even. If explaining, this is the honest hook for why 57% can still lose money (we win underdogs less and favorites at short prices).
 
 ---
 
@@ -44,7 +59,8 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 
 ### DAY 1 — Launch / the pinned thesis: "We grade every pick, win or lose"
 
-**Needs graphic:** yes — the **Pinned Positioning Graphic** (Artifact below). Pin on X and set as first IG grid post.
+**Needs graphic:** yes — the **Pinned Positioning Graphic**. Pin on X and set as first IG grid post.
+**Framing note:** Day 1 is deliberately **stat-free** — it sells the mechanism and the promise, not a number. That's correct and compliant. The record's honest complexity gets its own dedicated post on Day 4 (below), once we've established what we are.
 
 **X (pin this):**
 > New here, and doing one thing differently: we grade every pick we make. Win or lose.
@@ -123,7 +139,45 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 
 ---
 
-### DAY 4 — First methodology piece: "How the model builds a projection"
+### DAY 4 — THE HONESTY POST: "We win 57% — and we're still down money" (the signature trust flex)
+
+> **This is the new centerpiece of launch week.** It converts the awkward ROI truth into our single strongest differentiator. Post it once the account has stated what it is (Days 1–3), so it lands as principle, not apology. **Needs graphic: yes — the Honest Record Card** (`marketing/graphics/record-card-honest.html`, 1080×1080). Use exact live numbers at post time from `/record`; the copy below matches the record as of 2026-08-01.
+
+**X:**
+> Time to do the thing no tout ever does — show you our actual money.
+>
+> Our model is 52-39-1. That's a 57% win rate. Sounds great.
+>
+> It's also −9% ROI. We're DOWN 4 units.
+>
+> Both are true. A win rate without the price is a screenshot — you can win most of your bets and still lose money if you're winning at bad numbers. That's where we are, and we're showing you instead of hiding it.
+>
+> Every row is public: propjunkie.app/record
+>
+> A lean, not a lock. 18+. For entertainment. Gamble responsibly.
+
+**Instagram (feed — the Honest Record Card graphic):**
+> Here's the number most betting accounts would kill to have: a 57% win rate (52-39-1). Here's the number they'd never show you: −9% ROI. We're down about 4 units.
+>
+> Both are on our record page, right now, in public. Because a win rate on its own is a screenshot — you can win the majority of your bets and still be down if you're taking bad prices. That's exactly what our record shows, and hiding it would make us the thing we built PropJunkie to replace.
+>
+> A lean, not a lock. Free. Every pick graded against the final score at propjunkie.app/record. Link in bio.
+>
+> For informational & entertainment purposes only. Must be 18+ (21+ where required) and in a legal jurisdiction. Please gamble responsibly.
+>
+> #sportsbetting #bettingtwitter #mlb #transparency #bettingmodel #roi #handicapping #responsiblegaming
+
+**TikTok (works as the Day 3 "Grading our own picks" real episode too):**
+- 0–2s (hook): "Here's the number every betting page hides from you."
+- 2–10s: (screen-record `/record`) "We're 52 and 39. A 57% win rate. Looks like a winning system, right?"
+- 10–20s: "Now look here — negative 9% ROI. We're actually DOWN money. You can win most of your bets and still lose if the prices are bad."
+- 20–28s: "We show you both. On purpose. That's the whole account. Follow if you're tired of screenshots."
+- On-screen throughout: *21+. For entertainment. Gamble responsibly.*
+**Caption:** Win rate ≠ profit. We show both. propjunkie.app/record 21+, for entertainment, gamble responsibly. #sportsbetting #bettingtiktok #mlb #roi #21plus
+
+---
+
+### DAY 5 — Methodology: "How the model builds a projection"
 
 **X thread (the Data-Nerd magnet). Needs graphic: optional simple diagram card.**
 > 1/ How does PropJunkie actually pick a side? No "gut," no insider info. Here's the whole method — it's simpler and more humble than you'd think. 🧵
@@ -144,7 +198,7 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 
 ---
 
-### DAY 5 — Free-and-transparent flex + Prop Analyzer intro
+### DAY 6 — Free-and-transparent flex + Prop Analyzer intro
 
 **X:**
 > Reminder that costs nothing: the full daily slate, the ⭐ model leans, the Prop Analyzer, and our entire graded record are free. No signup wall. No $200 Discord.
@@ -154,47 +208,28 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 > 18+. For entertainment. Gamble responsibly.
 
 **TikTok:** Prop Analyzer screen-walk (script in TikTok section, Day 5).
-
 **IG Story:** quick screen-record of the Prop Analyzer + "free, no login" text + link sticker.
 
 ---
 
-### DAY 6 — A losing pick, owned (the trust superpower)
+### DAY 7 — Week-one recap (transparency, not performance)
 
-> **Only post this once a real lean has actually lost and been graded at `/record`. Do NOT fabricate a loss. If nothing has settled yet, run the Day 12 "guess our record" post instead and slot this the first day a graded loss exists.**
-
-**X:**
-> Last night the model was wrong: it leaned [PICK] on [MATCHUP] and it missed. [One honest sentence on what happened, e.g. "The under lost — a 3-run 8th blew it open."]
->
-> We're posting it because that's the deal: you see the losses too. It's already logged at propjunkie.app/record with all the rest.
->
-> A lean, not a lock. 18+. Gamble responsibly.
-
-**IG (feed, simple "graded: L" card in brand colors). Needs graphic: yes (Lean Card in the red/L state).**
-> The model took an L here last night. We're showing it on purpose — every lean gets graded, win or lose, at /record. That's the whole point of this account. Link in bio.
->
-> For informational & entertainment purposes only. 18+ (21+ where required), legal jurisdictions only. Please gamble responsibly.
->
-> #sportsbetting #bettingtwitter #transparency #mlb #handicapping #responsiblegaming
-
----
-
-### DAY 7 — Week-one recap + the "check it before you bet" ritual
+> **Framing:** the recap sells the *system and the honesty*, not a win-loss headline. If you cite any record number, cite the pair (win rate **and** −9% ROI) per the Record-framing rule — never the win rate alone.
 
 **X:**
 > One week in. Here's the deal if you just found us:
 > • A free daily ⭐ lean on the slate
 > • A Prop Analyzer that shows its math
-> • Every pick graded in public at /record — wins and losses
+> • Every pick graded in public at /record — and yeah, we're currently 57% but −9% ROI. We show that too.
 >
 > No paywall, no locks. Make the slate your last stop before you tap a bet. propjunkie.app
 >
 > 18+. For entertainment. Gamble responsibly.
 
-**IG (carousel recap — "Week 1 at PropJunkie," 3–4 slides pulling the week's real posts/leans). Needs graphic: yes.** Same hashtag block as Day 1.
+**IG (carousel recap — "Week 1 at PropJunkie," 3–4 slides). Needs graphic: yes.** Include one slide with the honest record pair (57.1% / −9.0% ROI). Same hashtag block as Day 1.
 
 **Reddit (optional, value-first — post to a relevant sub's daily/discussion thread, NOT as a standalone ad; read the sub's self-promo rules first):**
-> I've been building a free, no-paywall sports model that posts a daily lean and then grades every one of them in public against the final score (wins and losses both — nothing gets deleted). It's deliberately humble: it regresses team form to the mean, anchors to the market, and for MLB weights the starting pitchers' ERA. Not trying to sell anything — there's nothing to buy — but I'd genuinely value feedback from people who scrutinize methodology. The record page is here: propjunkie.app/record. For entertainment only, 18+, gamble responsibly.
+> I've been building a free, no-paywall sports model that posts a daily lean and then grades every one of them in public against the final score. Full transparency, so I'll say it plainly: it's 52-39-1 (57% win) but −9% ROI right now — winning more than half but at bad enough prices that it's down about 4 units. I'm not selling anything (there's nothing to buy); I'd genuinely value methodology feedback. It's deliberately humble: regresses team form to the mean, anchors to the market, and for MLB weights the starting pitchers' ERA. Record's here: propjunkie.app/record. For entertainment only, 18+, gamble responsibly.
 
 ---
 
@@ -212,13 +247,7 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 - On-screen disclaimer throughout: *21+. For entertainment. Gamble responsibly.*
 **Caption:** A betting model that shows its losses too. Free. propjunkie.app 21+, for entertainment, gamble responsibly. #sportsbetting #bettingtiktok #mlb #sportsbettingtips #bettingmodel #21plus
 
-### Day 3 — "Grading our own picks" (first real episode; only real leans)
-- 0–2s: "Yesterday's lean — did the model hit or miss?"
-- 2–10s: "It leaned [PICK] on [MATCHUP]. Here's why: [one honest reason]."
-- 10–20s: "Final score: [REAL RESULT]. So that's a [W / L]." (show the graded row on /record)
-- 20–28s: "Win or lose, it goes on the record. That's the deal. Tonight's slate is up — free, link in bio."
-- On-screen: *21+. For entertainment. Gamble responsibly.*
-**Caption:** We grade our own picks, out loud. #sportsbetting #bettingtiktok #mlb #21plus #gambleresponsibly
+### Day 4 — The honesty video (see Day 4 above — win rate vs ROI). This is the strongest TikTok of the week; consider making it the pinned video.
 
 ### Day 5 — Prop Analyzer screen-walk
 - 0–2s: "Free tool that projects a player's stat from his last games — watch."
@@ -238,10 +267,10 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 
 ## 3. WEEKS 2–4 (Days 8–30) — dated calendar
 
-**How to read this:** each day lists the platform slots and a written hook/caption you can paste (fill `[brackets]` from live data). Recurring formats rotate: **Daily Lean** (X + IG card, every day), **Methodology** (weekly X thread + IG carousel), **Model-vs-You poll**, **Record update** (real numbers only), **Prop-Analyzer demo**, **Myth-bust**, **Owned loss**. TikTok runs the "Grading our own picks" series ~3x/wk plus a myth-bust/feature video. Daily IG Story = "slate live" + agree/fade poll (assume it runs every day; not relisted).
+**How to read this:** each day lists the platform slots and a written hook/caption you can paste (fill `[brackets]` from live data). Recurring formats rotate: **Daily Lean** (X + IG card, every day), **Methodology** (weekly X thread + IG carousel), **Model-vs-You poll**, **Record update** (real numbers only, always the win-rate **and** ROI pair), **Prop-Analyzer demo**, **Myth-bust**, **Owned loss**. TikTok runs the "Grading our own picks" series ~3x/wk plus a myth-bust/feature video. Daily IG Story = "slate live" + agree/fade poll.
 
 **Hashtag sets (reuse):**
-- **X:** pick 1–2 → `#MLB` `#BettingTwitter` (swap `#NFL` when preseason starts)
+- **X:** pick 1–2 → `#MLB` `#BettingTwitter` (swap `#NFL` as preseason ramps)
 - **IG:** `#sportsbetting #mlb #bettingpicks #overunder #bettingtwitter #sportsbettingmodel #handicapping #responsiblegaming #propbets #bettingcommunity`
 - **TikTok:** `#sportsbetting #bettingtiktok #mlb #sportsbettingtips #21plus #gambleresponsibly` (+ `#propbets` on prop videos)
 
@@ -269,15 +298,15 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 - IG feed (Prop Analyzer screenshot card): "Here's the projection, not just a pick." Needs graphic.
 
 **Day 12 — "Guess the record" engagement**
-- X: `Before I show you: what do you think our model's record is on graded leans so far? Reply your guess. Real answer (win AND loss count) at propjunkie.app/record — we show all of it. 18+, gamble responsibly.`
-- IG Story: "Guess our record" slider/quiz sticker → reveal the real `/record` number in the next frame. **Only reveal the actual number.**
+- X: `Before I show you: what do you think our model's record is on graded leans so far? Reply your guess. Then the real answer — win rate AND ROI, because one without the other is a screenshot — at propjunkie.app/record. 18+, gamble responsibly.`
+- IG Story: "Guess our record" slider/quiz sticker → reveal frame shows the **full pair** (57.1% win / −9.0% ROI), never the win rate alone. **Only reveal the actual live numbers.**
 
 **Day 13 — Daily Lean**
 - X + IG Lean Card. TikTok: "Grading our own picks" ep.
 
-**Day 14 — Weekly recap + Record update (real numbers only)**
-- X: `Two weeks in. The model's graded leans so far: [REAL W-L from /record]. We show every one — the misses too. Free slate + full record: propjunkie.app · 18+, for entertainment, gamble responsibly.` *(If the sample is still thin, drop the W-L and say: "Still a small sample — but every single one is public at /record. We'd rather show a thin honest record than a fake fat one.")*
-- IG (recap carousel). Needs graphic. TikTok: "2 weeks of grading our own picks — here's the honest scoreboard" (real number or the transparency line).
+**Day 14 — Weekly recap + Record update (real numbers, the pair)**
+- X: `Two weeks in. The model's graded leans: [LIVE W-L] — that's [LIVE win%], but [LIVE ROI%] ROI. We show both, because winning your bets and making money aren't the same thing. Every miss is on the page. propjunkie.app/record · 18+, for entertainment, gamble responsibly.` *(Numbers must be the live pair from `/record` at post time — win rate and ROI together, never win rate alone.)*
+- IG (recap carousel, include the honest record pair slide). Needs graphic. TikTok: "2 weeks of grading our own picks — the honest scoreboard, wins AND money."
 
 ---
 
@@ -309,9 +338,9 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 - X: `Still free. Still no Discord. Still grading every pick in public. The full slate, the Prop Analyzer, and the record cost you $0 and require no signup. propjunkie.app · 21+, gamble responsibly.`
 - IG Lean Card. TikTok: "Grading our own picks" ep.
 
-**Day 21 — Weekly recap + Record update (real)**
-- X: `Three weeks. Graded record so far: [REAL W-L] (or the honest transparency line if thin). Every miss is on the page too. propjunkie.app/record · 18+, for entertainment, gamble responsibly.`
-- IG recap carousel. TikTok: "3 weeks of grading ourselves."
+**Day 21 — Weekly recap + Record update (real, the pair)**
+- X: `Three weeks. Graded record: [LIVE W-L] / [LIVE win%] — and [LIVE ROI%] ROI. Both numbers, always. Every miss is on the page too. propjunkie.app/record · 18+, for entertainment, gamble responsibly.`
+- IG recap carousel. TikTok: "3 weeks of grading ourselves — wins and money."
 
 ---
 
@@ -331,24 +360,24 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 **Day 25 — Prop-Analyzer demo + Daily Lean**
 - X: prop demo write-up on a real player/line. TikTok: prop demo. IG prop card.
 
-**Day 26 — Myth-bust**
-- X: `A 72% win rate with no receipts is a screenshot, not a record. Ours grades itself automatically against final scores — you can audit every row. /record · 21+, gamble responsibly.`
+**Day 26 — Myth-bust (ties straight back to our own record)**
+- X: `A 72% win rate with no receipts is a screenshot, not a record. And even a real win rate isn't profit — you can win most of your bets and still lose on price. Ours grades itself automatically against final scores, ROI and all — audit every row. /record · 21+, gamble responsibly.`
 - TikTok: "How to spot a fake track record in 10 seconds." 21+.
 
 **Day 27 — Daily Lean + owned loss if applicable**
 - X + IG Lean Card. TikTok: "Grading our own picks" ep (real result, W or L).
 
-**Day 28 — Weekly recap + Record update (real)**
-- X: `Four weeks of posting a lean a day and grading every one. Record so far: [REAL W-L] (or transparency line). All of it public. propjunkie.app/record · 18+, gamble responsibly.`
+**Day 28 — Weekly recap + Record update (real, the pair)**
+- X: `Four weeks of posting a lean a day and grading every one. Record: [LIVE W-L] / [LIVE win%], [LIVE ROI%] ROI. All of it public — the win rate and the money. propjunkie.app/record · 18+, gamble responsibly.`
 - IG recap carousel. TikTok: "1 month of grading our own picks."
 
 **Day 29 — Community / thank-you + best-of**
-- X: `Month one, from zero. Thanks to everyone who followed a model honest enough to show its losses. Best thread of the month 👇 [link the pitcher-ERA or methodology thread]. propjunkie.app · 18+, gamble responsibly.`
+- X: `Month one, from zero. Thanks to everyone who followed a model honest enough to show its losses AND its ROI. Best thread of the month 👇 [link the pitcher-ERA or methodology thread]. propjunkie.app · 18+, gamble responsibly.`
 - IG carousel: "Month 1 — the honest scoreboard." Needs graphic.
 
 **Day 30 — 30-day thesis restatement (re-pin candidate) + Daily Lean**
-- X: `30 days in, same promise as day 1: a free daily lean, a model that shows its math, and every pick graded in public — win or lose. A lean, not a lock. Start at propjunkie.app/record · 18+, for entertainment, gamble responsibly.`
-- IG: refreshed Pinned Positioning Graphic. TikTok: "30 days of grading our own picks — here's what a month of honesty looks like." Real record or transparency line.
+- X: `30 days in, same promise as day 1: a free daily lean, a model that shows its math, and every pick graded in public — win rate and ROI, win or lose. A lean, not a lock. Start at propjunkie.app/record · 18+, for entertainment, gamble responsibly.`
+- IG: refreshed Pinned Positioning Graphic. TikTok: "30 days of grading our own picks — here's what a month of honesty looks like." Real record pair.
 
 ---
 
@@ -357,16 +386,17 @@ Rules on every post: no "lock/guaranteed/can't-lose/free money," no invented win
 Posts that need a graphic are flagged inline above. Priorities:
 
 **Built as Artifacts now (highest leverage):**
-1. **Pinned Positioning Graphic** — "We show our record." The brand thesis. **1080×1080 square (IG feed + X).** Day 1 pin.
-2. **Model Lean Card (reusable template)** — matchup + ⭐ lean + honest edge + on-graphic disclaimer, with a W/L "graded" state. **1080×1080 square (IG + X).** The daily workhorse (Days 3, 6, 8, 13, 15, 17, 20, 22, 27, 30...).
+1. **Honest Record Card** — `marketing/graphics/record-card-honest.html`. 57.1% win beside −9.0% ROI with the "win rate without price is a screenshot" thesis. **1080×1080 (IG feed + X).** Day 4 + recap posts. **Update the numbers to the live pair before each use.**
+2. **Pinned Positioning Graphic** — "We show our record." The brand thesis, stat-free. **1080×1080 (IG feed + X).** Day 1 pin. *(To build.)*
+3. **Model Lean Card (reusable template)** — matchup + ⭐ lean + honest edge + on-graphic disclaimer, with a W/L "graded" state. **1080×1080 (IG + X).** The daily workhorse. *(To build.)*
 
 **Build later as needed (noted, not yet built):**
-- Methodology carousel template (1080×1350 portrait, IG) — Days 4, 10, 16, 24.
+- Methodology carousel template (1080×1350 portrait, IG) — Days 5, 10, 16, 24.
 - Prop-Analyzer result card (1080×1080) — Days 11, 18, 25.
 - Weekly recap carousel (1080×1350, IG) — Days 7, 14, 21, 28, 29.
-- TikTok/Reels are screen-capture + on-screen text, not static graphics — no card needed, just the short disclaimer overlay.
+- TikTok/Reels are screen-capture + on-screen text — no card needed, just the short disclaimer overlay.
 
-Brand kit for all: bg `#0c0f0a`, surface `#141a12`, gold `#c9a84c` ("Prop"), text `#e8ecf4` ("Junkie"), green `#10b981` (edge/win), red `#ef4444` (loss), muted `#4a6a44`; Inter 700–900 headlines; dark premium "sharp bettor's terminal" feel.
+Brand kit for all: bg `#0c0f0a`, surface `#141a12`, gold `#c9a84c` ("Prop"), text `#e8ecf4` ("Junkie"), green `#10b981` (edge/win), red `#ef4444` (loss/negative ROI), muted `#4a6a44`; heavy system-font headlines; dark premium "sharp bettor's terminal" feel.
 
 ---
 

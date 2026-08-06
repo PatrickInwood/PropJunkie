@@ -1,0 +1,108 @@
+<title>PropJunkie — Honest Record Card</title>
+<style>
+  :root{
+    --bg:#0c0f0a; --surface:#141a12; --gold:#c9a84c; --green:#10b981;
+    --red:#ef4444; --text:#e8ecf4; --muted:#4a6a44;
+    --line:#243020;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:#05060455;display:flex;justify-content:center;align-items:flex-start}
+  .stage{
+    width:1080px;height:1080px;position:relative;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 82% -8%, #1a2416 0%, rgba(20,26,18,0) 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-variant-numeric:tabular-nums;
+    padding:84px 88px;
+    display:flex;flex-direction:column;
+  }
+  /* faint terminal grid */
+  .stage::before{
+    content:"";position:absolute;inset:0;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),
+                     linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:60px 60px;opacity:.10;pointer-events:none;
+  }
+  .stage>*{position:relative;z-index:1}
+
+  .eyebrow{
+    display:flex;align-items:center;gap:14px;
+    font-size:19px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;
+  }
+  .eyebrow .brand .p{color:var(--gold)}
+  .eyebrow .brand .j{color:var(--text)}
+  .eyebrow .tag{color:var(--muted);letter-spacing:.24em}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold)}
+
+  .headline{
+    margin-top:52px;
+    font-size:66px;line-height:1.02;font-weight:900;letter-spacing:-.02em;
+    text-wrap:balance;max-width:15ch;
+  }
+  .headline .amp{color:var(--gold)}
+
+  .stats{
+    margin-top:56px;display:grid;grid-template-columns:1fr 1fr;
+    border:1px solid var(--line);border-radius:4px;background:rgba(20,26,18,.55);
+  }
+  .cell{padding:40px 44px}
+  .cell + .cell{border-left:1px solid var(--line)}
+  .cell .label{
+    font-size:17px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--muted);
+  }
+  .cell .fig{font-size:112px;font-weight:900;line-height:.9;letter-spacing:-.03em;margin-top:22px}
+  .fig.neutral{color:var(--text)}
+  .fig.neg{color:var(--red)}
+  .cell .sub{margin-top:20px;font-size:22px;font-weight:700;color:#b9c2b2}
+  .cell .sub .hl{color:var(--gold)}
+
+  .teach{
+    margin-top:auto;padding-top:44px;
+    font-size:27px;line-height:1.42;font-weight:600;color:#cdd4c8;max-width:44ch;
+  }
+  .teach b{color:var(--text);font-weight:800}
+  .teach .g{color:var(--gold);font-weight:800}
+
+  .footer{
+    margin-top:36px;padding-top:26px;border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+  }
+  .footer .url{font-size:26px;font-weight:900;letter-spacing:-.01em}
+  .footer .url .p{color:var(--gold)}
+  .footer .disc{font-size:16px;font-weight:600;color:var(--muted);text-align:right;max-width:30ch;line-height:1.4}
+</style>
+
+<div class="stage">
+  <div class="eyebrow">
+    <span class="dot"></span>
+    <span class="brand"><span class="p">Prop</span><span class="j">Junkie</span></span>
+    <span class="tag">// Model Record · live</span>
+  </div>
+
+  <h1 class="headline">We won more than half our picks <span class="amp">&amp;</span> we're still down on the money.</h1>
+
+  <div class="stats">
+    <div class="cell">
+      <div class="label">Win rate</div>
+      <div class="fig neutral">57.1%</div>
+      <div class="sub">52&ndash;39&ndash;1 <span class="hl">·</span> 92 graded leans</div>
+    </div>
+    <div class="cell">
+      <div class="label">Return on investment</div>
+      <div class="fig neg">&minus;9.0%</div>
+      <div class="sub">&minus;4.16 units <span class="hl">·</span> 46 priced picks</div>
+    </div>
+  </div>
+
+  <p class="teach">
+    A win rate without the price is a screenshot, not a record. Most touts show you the <b>57%</b> and call it a system. We show you the <span class="g">&minus;9%</span> too &mdash; because the money is the only honest scoreboard, and every lean is graded against the final score in public.
+  </p>
+
+  <div class="footer">
+    <div class="url"><span class="p">propjunkie.app</span>/record</div>
+    <div class="disc">For entertainment only. 18+ (21+ where required), legal jurisdictions. Please gamble responsibly.</div>
+  </div>
+</div>

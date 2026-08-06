@@ -734,15 +734,18 @@ def record_data():
             by_sport[label] = _record_from(rows)
 
     history = [{
-        "sport":  _SPORT_LABELS.get(p.sport, p.sport),
-        "date":   p.commence_time.strftime("%b %-d") if p.commence_time else "",
-        "away":   p.away_team,
-        "home":   p.home_team,
-        "market": _MARKET_LABELS.get(p.market, p.market),
-        "pick":   p.pick,
-        "result": p.result,
-        "score":  (f"{p.away_score}–{p.home_score}"
-                   if p.away_score is not None else ""),
+        "sport":      _SPORT_LABELS.get(p.sport, p.sport),
+        "date":       p.commence_time.strftime("%b %-d") if p.commence_time else "",
+        "away":       p.away_team,
+        "home":       p.home_team,
+        "market":     _MARKET_LABELS.get(p.market, p.market),
+        "market_key": p.market,
+        "pick":       p.pick,
+        "edge":       p.edge,
+        "odds":       p.odds,
+        "result":     p.result,
+        "score":      (f"{p.away_score}–{p.home_score}"
+                       if p.away_score is not None else ""),
     } for p in graded[:100]]
 
     return jsonify({
