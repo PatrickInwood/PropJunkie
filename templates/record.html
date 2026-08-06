@@ -164,7 +164,8 @@
         catch(e){ el.innerHTML = `<div class="empty">Couldn't load the record right now. Try refreshing.</div>`; return; }
 
         if(!d.graded){
-            el.innerHTML = `<div class="empty">📊 <b>Tracking has started.</b><br>
+            el.innerHTML = `<div class="empty">📊 <b>Tracking has restarted${d.since?` (${d.since})`:''}.</b><br>
+                The model was just made more selective, so the record was reset to measure it cleanly.<br>
                 Graded results appear here as games finish${d.pending?` — ${d.pending} leans are locked in and pending`:''}.<br>
                 Check back after tonight's slate.</div>`;
             return;
@@ -178,8 +179,9 @@
             <span class="wl">${rec(o)}</span>
             <span class="pct">${pct(o)}</span>
             ${roiHead}
-            <span class="sub">${d.graded} leans graded${d.pending?` · ${d.pending} pending`:''}</span>
+            <span class="sub">${d.graded} leans graded${d.pending?` · ${d.pending} pending`:''}${d.since?` · since ${d.since}`:''}</span>
           </div>
+          ${d.since ? `<div class="smallnote">Record reset ${d.since} after the model was made more selective — this measures the current model only.</div>` : ''}
           ${o.units!=null && o.priced<20 ? `<div class="smallnote">ROI is on ${o.priced} graded lean${o.priced===1?'':'s'} with recorded odds, at a flat 1 unit each — an early, small sample. Break-even is ~52.4% at −110.</div>` : ''}
           <div class="stat-grid">
             ${statCard('Last 10', d.last10)}

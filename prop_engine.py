@@ -487,7 +487,18 @@ def get_event_props(sport_key: str, event_id: str, markets: list, bookmakers: li
 # ─────────────────────────────────────────
 
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports"
-ESPN_HDR  = {'User-Agent': 'Mozilla/5.0 (compatible; PropJunkie/1.0)'}
+# Look like a real browser. ESPN's free endpoints started 403-ing our old
+# bot-identifying UA ("compatible; PropJunkie/1.0"), which silently emptied the
+# whole site. A full browser-like header set (UA + Accept + Accept-Language +
+# Referer) is served normally.
+ESPN_HDR  = {
+    'User-Agent': ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                   'AppleWebKit/537.36 (KHTML, like Gecko) '
+                   'Chrome/125.0.0.0 Safari/537.36'),
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Referer': 'https://www.espn.com/',
+}
 
 ESPN_SPORT_MAP = {
     'basketball_nba':       ('basketball', 'nba'),
@@ -1401,21 +1412,21 @@ GAME_MODEL_CONFIG = {
     #   gap exceeds this, the model is likely missing info (e.g. the starting
     #   pitcher) — suppress the pick. total_edge_cap: max believable total edge.
     "baseball_mlb":         {"lookback_days": 18, "home_adv": 0.15, "pyth_exp": 1.83, "regress_games": 5,
-                             "min_games": 5, "total_threshold": 0.5, "ml_threshold": 0.03, "unit": "runs",
+                             "min_games": 5, "total_threshold": 1.0, "ml_threshold": 0.05, "unit": "runs",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5, "sp_weight": 0.55,
                              # MLB run line is ±1.5 with heavy juice; only lean on a clearly
                              # mispriced margin so we're selective, not "always take the dog +1.5".
                              "spread_threshold": 2.0, "spread_edge_cap": 3.0, "form_half_life": 10},
     "basketball_nba":       {"lookback_days": 24, "home_adv": 2.5,  "pyth_exp": 13.9, "regress_games": 4,
-                             "min_games": 5, "total_threshold": 3.0, "ml_threshold": 0.03, "unit": "pts",
+                             "min_games": 5, "total_threshold": 3.0, "ml_threshold": 0.05, "unit": "pts",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 14,
                              "spread_threshold": 2.5, "spread_edge_cap": 12, "form_half_life": 14},
     "americanfootball_nfl": {"lookback_days": 45, "home_adv": 2.0,  "pyth_exp": 2.37, "regress_games": 3,
-                             "min_games": 3, "total_threshold": 2.5, "ml_threshold": 0.03, "unit": "pts",
+                             "min_games": 3, "total_threshold": 2.5, "ml_threshold": 0.05, "unit": "pts",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 12,
                              "spread_threshold": 2.0, "spread_edge_cap": 10, "form_half_life": 28},
     "icehockey_nhl":        {"lookback_days": 21, "home_adv": 0.3,  "pyth_exp": 2.0, "regress_games": 5,
-                             "min_games": 5, "total_threshold": 0.6, "ml_threshold": 0.03, "unit": "goals",
+                             "min_games": 5, "total_threshold": 0.6, "ml_threshold": 0.05, "unit": "goals",
                              "market_weight": 0.6, "ml_gap_cap": 0.18, "total_edge_cap": 2.5,
                              "spread_threshold": 0.75, "spread_edge_cap": 3.0, "form_half_life": 14},
 }

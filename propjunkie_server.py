@@ -631,10 +631,17 @@ def _snapshot_picks(sport, picks):
         logger.exception("Error snapshotting picks for %s", sport)
 
 
+# The game model was retuned to be more selective on this date. The public
+# record measures the CURRENT model only: picks frozen before this cutoff (the
+# older, looser model) stay in the DB for audit but are excluded from the shown
+# record, so /record reflects one model version rather than a mix.
+MODEL_RESET_AT = datetime(2026, 8, 6, 19, 50, tzinfo=timezone.utc)
+
+
 def _grade_pending_picks(sport=None):
     """Grade any ungraded picks whose games have finished. Never raises."""
     try:
-        q = Pick.query.filter_by(graded=False)
+        q = Pick.query.filter_by(graded=False).filter(Pick.created_at >= MODEL_RESET_AT)
         if sport:
             q = q.filter_by(sport=sport)
         pending = q.all()
@@ -696,8 +703,10 @@ def model_record():
     """PropJunkie's graded accuracy: overall, last 10, and by market."""
     _grade_pending_picks()
     graded = (Pick.query.filter_by(graded=True)
+              .filter(Pick.created_at >= MODEL_RESET_AT)
               .order_by(Pick.graded_at.desc()).all())
-    pending = Pick.query.filter_by(graded=False).count()
+    pending = (Pick.query.filter_by(graded=False)
+               .filter(Pick.created_at >= MODEL_RESET_AT).count())
     return jsonify({
         "overall":   _record_from(graded),
         "last10":    _record_from(graded[:10]),
@@ -706,6 +715,7 @@ def model_record():
         "total":     _record_from([p for p in graded if p.market == "totals"]),
         "graded":    len(graded),
         "pending":   pending,
+        "since":     MODEL_RESET_AT.strftime("%b %-d, %Y"),
     })
 
 
@@ -724,8 +734,10 @@ def record_data():
     and a graded-pick history."""
     _grade_pending_picks()
     graded = (Pick.query.filter_by(graded=True)
+              .filter(Pick.created_at >= MODEL_RESET_AT)
               .order_by(Pick.graded_at.desc()).all())
-    pending = Pick.query.filter_by(graded=False).count()
+    pending = (Pick.query.filter_by(graded=False)
+               .filter(Pick.created_at >= MODEL_RESET_AT).count())
 
     by_sport = {}
     for sk, label in _SPORT_LABELS.items():
@@ -758,6 +770,7 @@ def record_data():
         "history":   history,
         "graded":    len(graded),
         "pending":   pending,
+        "since":     MODEL_RESET_AT.strftime("%b %-d, %Y"),
     })
 
 
