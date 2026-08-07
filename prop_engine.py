@@ -2086,41 +2086,48 @@ def _oddsapi_market_key(internal_key: str) -> str:
     return _ODDS_API_MARKET_OVERRIDES.get(internal_key, internal_key)
 
 
-# Prop-edge humility knobs. A book prop line is sharp — it already prices the
-# opponent, park, weather, and expected innings that our recent-form projection
-# knows nothing about. So we treat the line as a strong prior and trust our own
-# projection only partially. Same philosophy as the market-anchored game model:
-# don't let a naive disagreement masquerade as a huge edge.
-PROP_MODEL_WEIGHT = 0.20   # weight on our projection; 0.80 stays on the book line
-PROP_LEAN_MIN_EDGE = 0.03  # below this, show the line but call no lean
-PROP_EDGE_CAP = 0.12       # guardrail — we never claim more than this
+# Prop-edge humility knobs. We estimate P(over) from the player's OWN recent
+# games (an empirical hit-rate), not a normal curve — a normal curve badly
+# overstates the 'over' on low-count, right-skewed stats (hits, total bases, HRs),
+# which made every batter look like a 'bet the over' at the cap. That rate is
+# then regressed toward the market (a sharp prior) so we never overstate the edge.
+PROP_MODEL_WEIGHT = 0.33    # weight on our recent-form rate; the rest stays on the market
+PROP_LEAN_MIN_EDGE = 0.03   # below this, show the line but call no lean
+PROP_EDGE_CAP = 0.12        # guardrail — we never claim more than this
+PROP_EDGE_MIN_GAMES = 5     # need at least this many recent games to claim any edge
 
 
-def _prop_edge(projection, props: list, sport_key: str, market_key: str):
-    """Compare our projection to the book line → line + a *market-anchored* edge.
+def _prop_edge(projection, recent_values, props: list, sport_key: str, market_key: str):
+    """Compare our recent-form hit-rate to the book line → line + a market-anchored edge.
 
-    Anchors to the book with the best Over price (one coherent book for the line
-    and both prices). Regresses our projection toward the line (PROP_MODEL_WEIGHT)
-    before computing probabilities, removes the vig, caps the edge, and only calls
-    a lean past a minimum. None if there's no usable line.
+    P(over) is the recency-weighted fraction of the player's recent games that
+    cleared the line (½ credit on a push) — no distribution assumption. We anchor
+    to the book with the best Over price, regress our rate toward the market's
+    no-vig probability (PROP_MODEL_WEIGHT), cap the edge, and only call a lean past
+    a minimum. None if there's no usable line or too few games.
     """
-    if projection is None or not props:
+    if projection is None or not props or len(recent_values or []) < PROP_EDGE_MIN_GAMES:
         return None
     top = best_line(props, side="over")
     if not top or top.get("line") is None:
         return None
     line = top["line"]
-    # Regress the naive projection heavily toward the market line.
-    blended = PROP_MODEL_WEIGHT * projection + (1 - PROP_MODEL_WEIGHT) * line
-    std = get_std_dev_pct(sport_key, market_key)
-    p_over = calculate_hit_probability(blended, line, std)
-    p_under = 1 - p_over
     imp_over, imp_under = remove_vig(top["over_odds"], top["under_odds"])
-    edge_over, edge_under = p_over - imp_over, p_under - imp_under
+    # Recency-weighted empirical over-rate (newest games count most).
+    n = len(recent_values)
+    wts = [0.9 ** (n - 1 - i) for i in range(n)]
+    tw = sum(wts)
+    over_w = sum(w for v, w in zip(recent_values, wts) if v > line)
+    push_w = sum(w for v, w in zip(recent_values, wts) if v == line)
+    emp_over = (over_w + 0.5 * push_w) / tw if tw else imp_over
+    # Regress our rate toward the market (strong prior) → the edge is only the
+    # share of our disagreement we're willing to stand behind.
+    model_over = PROP_MODEL_WEIGHT * emp_over + (1 - PROP_MODEL_WEIGHT) * imp_over
+    edge_over, edge_under = model_over - imp_over, imp_over - model_over
     if edge_over >= edge_under:
-        side, edge, model_prob, odds = "over", edge_over, p_over, top["over_odds"]
+        side, edge, model_prob, odds = "over", edge_over, model_over, top["over_odds"]
     else:
-        side, edge, model_prob, odds = "under", edge_under, p_under, top["under_odds"]
+        side, edge, model_prob, odds = "under", edge_under, 1 - model_over, top["under_odds"]
     edge = max(0.0, min(edge, PROP_EDGE_CAP))   # humble: never claim an extreme edge
     return {
         "line":           line,
@@ -2237,7 +2244,7 @@ def generate_prop_board(sport_key: str) -> list:
                 if proj.get("projection") is None:
                     continue
                 line_info = _prop_edge(
-                    proj["projection"],
+                    proj["projection"], proj.get("recent_values") or [],
                     extract_player_prop(props_raw, name, "pitcher_strikeouts") if props_raw else [],
                     sport_key, "player_pitcher_strikeouts")
                 cards.append(_prop_card(
@@ -2258,7 +2265,7 @@ def generate_prop_board(sport_key: str) -> list:
                 if bproj.get("projection") is None:
                     continue
                 line_info = _prop_edge(
-                    bproj["projection"],
+                    bproj["projection"], bproj.get("recent_values") or [],
                     extract_player_prop(props_raw, bname, oddsapi_mkt),
                     sport_key, internal_mkt)
                 cards.append(_prop_card(
