@@ -2128,7 +2128,10 @@ def _prop_edge(projection, recent_values, props: list, sport_key: str, market_ke
         side, edge, model_prob, odds = "over", edge_over, model_over, top["over_odds"]
     else:
         side, edge, model_prob, odds = "under", edge_under, 1 - model_over, top["under_odds"]
-    edge = max(0.0, min(edge, PROP_EDGE_CAP))   # humble: never claim an extreme edge
+    # Smooth soft-cap (tanh) instead of a hard clip: leaves small edges ~unchanged
+    # but eases large ones toward the ceiling so they spread out below it rather
+    # than all piling on the exact cap value.
+    edge = PROP_EDGE_CAP * math.tanh(max(0.0, edge) / PROP_EDGE_CAP)
     return {
         "line":           line,
         "lean":           side if edge >= PROP_LEAN_MIN_EDGE else None,
