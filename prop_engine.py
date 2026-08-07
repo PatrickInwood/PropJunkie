@@ -2035,13 +2035,77 @@ def _is_today_et(iso: str) -> bool:
         return False
 
 
-def generate_prop_board(sport_key: str) -> list:
-    """A board of player-prop projections for today's games (100% free data).
+# Internal market_key → The Odds API's market key. They already match for
+# NBA/NFL/NHL (both carry the "player_" prefix), but MLB drops it on the Odds
+# API side (batter_hits, pitcher_strikeouts), so those need an explicit map.
+_ODDS_API_MARKET_OVERRIDES = {
+    "player_pitcher_strikeouts":    "pitcher_strikeouts",
+    "player_pitcher_outs":          "pitcher_outs",
+    "player_pitcher_hits_allowed":  "pitcher_hits_allowed",
+    "player_pitcher_walks_allowed": "pitcher_walks",
+    "player_pitcher_earned_runs":   "pitcher_earned_runs",
+    "player_batter_hits":           "batter_hits",
+    "player_batter_home_runs":      "batter_home_runs",
+    "player_batter_total_bases":    "batter_total_bases",
+    "player_batter_rbis":           "batter_rbis",
+    "player_batter_runs_scored":    "batter_runs_scored",
+    "player_batter_singles":        "batter_singles",
+    "player_batter_doubles":        "batter_doubles",
+    "player_batter_triples":        "batter_triples",
+    "player_batter_walks":          "batter_walks",
+    "player_batter_strikeouts":     "batter_strikeouts",
+    "player_batter_stolen_bases":   "batter_stolen_bases",
+    "player_hits_runs_rbis":        "batter_hits_runs_rbis",
+}
 
-    v1 (MLB): each game's probable starting pitchers → a strikeout projection
-    with recent form. No betting line or edge (we have no free prop lines), so
-    the card shows PropJunkie's projection + recent games only — never a
-    fabricated edge or hit-rate. Sorted by projection, highest first.
+
+def _oddsapi_market_key(internal_key: str) -> str:
+    """Map our internal market key to the Odds API's market key."""
+    return _ODDS_API_MARKET_OVERRIDES.get(internal_key, internal_key)
+
+
+def _prop_edge(projection, props: list, sport_key: str, market_key: str):
+    """Compare our projection to the book line → line + edge info. None if no line.
+
+    Anchors to the book with the best Over price (a single coherent book for the
+    line and both prices), removes the vig, and leans the side we have the bigger
+    edge on. edge_pct is our model probability minus the book's no-vig probability.
+    """
+    if projection is None or not props:
+        return None
+    top = best_line(props, side="over")
+    if not top or top.get("line") is None:
+        return None
+    line = top["line"]
+    std = get_std_dev_pct(sport_key, market_key)
+    p_over = calculate_hit_probability(projection, line, std)
+    p_under = 1 - p_over
+    imp_over, imp_under = remove_vig(top["over_odds"], top["under_odds"])
+    edge_over, edge_under = p_over - imp_over, p_under - imp_under
+    if edge_over >= edge_under:
+        lean, edge, model_prob, odds = "over", edge_over, p_over, top["over_odds"]
+    else:
+        lean, edge, model_prob, odds = "under", edge_under, p_under, top["under_odds"]
+    return {
+        "line":           line,
+        "lean":           lean,
+        "edge_pct":       round(edge * 100, 1),
+        "model_prob_pct": round(model_prob * 100, 1),
+        "odds":           odds,             # price for the side we lean
+        "over_odds":      top["over_odds"],
+        "under_odds":     top["under_odds"],
+        "best_book":      top["bookmaker"],
+    }
+
+
+def generate_prop_board(sport_key: str) -> list:
+    """A board of player-prop projections for today's games.
+
+    v2 (MLB): each game's probable starting pitchers → a strikeout projection
+    (free statsapi game logs) compared against the sportsbook's posted line (paid
+    Odds API) to show a real edge. When no line is posted yet, the card degrades
+    gracefully to projection-only — never a fabricated edge. Cards with an edge
+    sort to the top; projection-only cards follow by projection.
     """
     if sport_key != "baseball_mlb":
         return []
@@ -2055,6 +2119,14 @@ def generate_prop_board(sport_key: str) -> list:
         sp = sp_map.get((_norm_team(g["away_team"]), _norm_team(g["home_team"])))
         if not sp:
             continue
+        # One Odds API call per game for the strikeout market → both starters'
+        # lines. Degrades to projection-only if the book/market isn't available.
+        props_raw = None
+        try:
+            props_raw = get_event_props(sport_key, g["id"], ["pitcher_strikeouts"])
+        except Exception as e:
+            print(f"[PropJunkie] no strikeout props for event {g['id']}: {e}")
+
         for who, team, opp in (("away", g["away_team"], g["home_team"]),
                                ("home", g["home_team"], g["away_team"])):
             name = sp.get(f"{who}_sp_name")
@@ -2066,6 +2138,13 @@ def generate_prop_board(sport_key: str) -> list:
                 continue
             vals = proj.get("recent_values") or []
             pid = sp.get(f"{who}_sp_id")
+
+            line_info = None
+            if props_raw:
+                plist = extract_player_prop(props_raw, name, "pitcher_strikeouts")
+                line_info = _prop_edge(proj["projection"], plist, sport_key,
+                                       "player_pitcher_strikeouts")
+
             cards.append({
                 "player":         name,
                 "headshot":       (f"https://midfield.mlbstatic.com/v1/people/{pid}/spots/120"
@@ -2085,8 +2164,16 @@ def generate_prop_board(sport_key: str) -> list:
                 "games_used":     proj["games_used"],
                 "low_confidence": proj["low_confidence"],
                 "era":            sp.get(f"{who}_sp_era"),
+                # Betting line + edge (None when the book hasn't posted this prop).
+                "line":           line_info["line"] if line_info else None,
+                "lean":           line_info["lean"] if line_info else None,
+                "edge_pct":       line_info["edge_pct"] if line_info else None,
+                "odds":           line_info["odds"] if line_info else None,
+                "best_book":      line_info["best_book"] if line_info else None,
             })
-    cards.sort(key=lambda c: c["projection"], reverse=True)
+    # Actionable cards (real edge) first, biggest edge on top; then projection-only.
+    cards.sort(key=lambda c: (c["edge_pct"] is not None, c["edge_pct"] or 0,
+                              c["projection"]), reverse=True)
     return cards
 
 
