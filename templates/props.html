@@ -92,6 +92,18 @@
         .recent { margin-top: 12px; font-size: 12px; color: var(--text-2); } .recent b { color: var(--text); }
         .thin { color: var(--yellow); font-size: 11px; margin-top: 6px; }
         .locked-line { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+        /* Line + edge block (the taste / Pro payload) */
+        .edge-row { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .edge-row.none { font-size: 11px; color: var(--muted); }
+        .line-lab { font-size: 9px; font-weight: 800; letter-spacing: 0.5px; color: var(--muted); text-transform: uppercase; }
+        .line-val { font-size: 15px; font-weight: 800; margin-top: 1px; }
+        .edge-right { text-align: right; }
+        .lean-pill { display: inline-block; font-size: 12px; font-weight: 800; border-radius: 20px; padding: 4px 12px; letter-spacing: 0.3px; }
+        .lean-over { color: var(--green); border: 1px solid var(--green); }
+        .lean-under { color: var(--red); border: 1px solid var(--red); }
+        .edge-meta { font-size: 11px; color: var(--text-2); margin-top: 4px; }
+        .edge-pct { font-weight: 800; }
+        .edge-pct.over { color: var(--green); } .edge-pct.under { color: var(--red); }
 
         /* Locked (Pro) card */
         .card.locked { position: relative; overflow: hidden; min-height: 200px; display: grid; place-items: center; text-align: center; border-style: dashed; }
@@ -147,7 +159,7 @@
         <div class="page-title">AI Player Prop Predictions</div>
         <button class="how-btn" onclick="openHow()">＋ How it works</button>
     </div>
-    <div class="page-sub">PropJunkie's projection for each player's prop today, built from their recent games. A projection — not a lock.</div>
+    <div class="page-sub">PropJunkie's projection vs. the book line for each player prop today, with our market-anchored edge. A lean, not a lock.</div>
 
     <div class="controls">
         <div class="sport-tabs">
@@ -159,6 +171,7 @@
         <div class="spacer"></div>
         <div class="sort-wrap">Sort
             <select class="sort" id="sortSel" onchange="render()">
+                <option value="edge">Edge (best leans)</option>
                 <option value="proj">Projection</option>
                 <option value="l5">Recent form (L5)</option>
             </select>
@@ -181,7 +194,7 @@
 
     <div id="board"><div class="loading"><div class="spinner"></div>Loading projections…</div></div>
 
-    <div class="note">Projections come from each player's recent games (free public data). Lines, edge %, and hit-rate history unlock with the Pro tier. For entertainment only — 21+, please gamble responsibly.</div>
+    <div class="note">Projections come from each player's recent games; the edge compares our projection to the sportsbook's posted line, regressed toward the market so we never overstate it. Today's top leans are free — the full board unlocks with Pro. For entertainment only — 21+, please gamble responsibly.</div>
 </div>
 
 <!-- How it works modal -->
@@ -263,7 +276,33 @@
           </div>
           ${recent ? `<div class="recent"><b>Last ${(c.recent||[]).length}:</b> ${recent}</div>` : ''}
           ${c.low_confidence ? `<div class="thin">⚠ thin sample — take with caution</div>` : ''}
-          <div class="locked-line">🔒 Line, edge % &amp; hit-rate history unlock with Pro</div>
+          ${edgeBlock(c)}
+        </div>`;
+    }
+
+    function oddsFmt(n) { return n == null ? '' : (n > 0 ? '+' + n : '' + n); }
+
+    // The book line + our market-anchored edge. Honest by design: a clear lean
+    // only when the edge clears our threshold; otherwise we show the line and
+    // say there's no edge. Projection-only when the book hasn't posted a line.
+    function edgeBlock(c) {
+        if (c.line == null) {
+            return `<div class="edge-row none">No book line posted yet — projection only.</div>`;
+        }
+        if (!c.lean) {
+            return `<div class="edge-row none">Book line <b>${c.market} ${c.line}</b> · no clear edge — we pass.</div>`;
+        }
+        const side = c.lean === 'over' ? 'OVER' : 'UNDER';
+        return `
+        <div class="edge-row">
+          <div>
+            <div class="line-lab">Book line</div>
+            <div class="line-val">${c.market} ${c.line}</div>
+          </div>
+          <div class="edge-right">
+            <span class="lean-pill lean-${c.lean}">${side} ${c.line}</span>
+            <div class="edge-meta"><span class="edge-pct ${c.lean}">+${c.edge_pct}% edge</span> · ${oddsFmt(c.odds)}${c.best_book ? ' · ' + c.best_book : ''}</div>
+          </div>
         </div>`;
     }
 
@@ -274,7 +313,7 @@
           <div class="lock-cta">
             <div class="lock-badge">🔒 PRO</div>
             <div class="lock-title">Unlock the Pro Tier</div>
-            <div class="lock-sub">See every projection on today's board.</div>
+            <div class="lock-sub">See every lean, line, and edge on today's board.</div>
             <a href="/app" class="btn-pro">Go Pro — Unlock All</a>
           </div>
         </div>`;
@@ -285,7 +324,13 @@
         let list = cards.slice();
         if (selectedGame !== 'all') list = list.filter(c => c.game_id === selectedGame);
         const sort = document.getElementById('sortSel').value;
-        list.sort((a, b) => sort === 'l5' ? (b.l5_avg || 0) - (a.l5_avg || 0) : b.projection - a.projection);
+        list.sort((a, b) => {
+            if (sort === 'l5') return (b.l5_avg || 0) - (a.l5_avg || 0);
+            if (sort === 'proj') return b.projection - a.projection;
+            // 'edge': actionable leans first (biggest edge), then the rest by projection.
+            const ea = a.lean ? (a.edge_pct || 0) : -1, eb = b.lean ? (b.edge_pct || 0) : -1;
+            return eb !== ea ? eb - ea : b.projection - a.projection;
+        });
 
         if (!list.length) { board.innerHTML = `<div class="empty">No projections for this selection yet.</div>`; return; }
 
