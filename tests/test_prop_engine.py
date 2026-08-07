@@ -684,3 +684,50 @@ class TestFirstTdModel:
     def test_edge_never_exceeds_cap(self):
         info = pe._first_td_edge("Star Player", [1] * 10, _first_td_props(9000))
         assert info["edge_pct"] <= pe.PROP_EDGE_CAP * 100
+
+
+# ─────────────────────────────────────────
+# NHL GAME-LOG LAYER (api-web.nhle.com) — network mocked
+# ─────────────────────────────────────────
+
+class TestNhlStatValues:
+    """_fetch_nhl_stat_values maps markets to NHL game-log fields, newest→oldest."""
+
+    class _FakeResp:
+        status_code = 200
+        def json(self):
+            # API returns newest-first; we reverse to oldest→newest for recency weighting.
+            return {"gameLog": [
+                {"shots": 3, "points": 1, "goals": 0, "assists": 1},   # newest
+                {"shots": 5, "points": 2, "goals": 1, "assists": 1},
+                {"shots": 8, "points": 0, "goals": 0, "assists": 0},   # oldest
+            ]}
+
+    def _stub(self, monkeypatch):
+        monkeypatch.setattr(pe, "_nhl_player", lambda name: (8478402, "C", "http://hs"))
+        monkeypatch.setattr(pe.requests, "get", lambda *a, **k: self._FakeResp())
+
+    def test_reverses_to_oldest_first(self, monkeypatch):
+        self._stub(monkeypatch)
+        assert pe._fetch_nhl_stat_values(
+            "Connor McDavid", "player_shots_on_goal", "icehockey_nhl") == [8.0, 5.0, 3.0]
+
+    def test_maps_points(self, monkeypatch):
+        self._stub(monkeypatch)
+        assert pe._fetch_nhl_stat_values(
+            "Connor McDavid", "player_points", "icehockey_nhl") == [0.0, 2.0, 1.0]
+
+    def test_unknown_market_empty(self, monkeypatch):
+        self._stub(monkeypatch)
+        assert pe._fetch_nhl_stat_values(
+            "X", "player_not_a_market", "icehockey_nhl") == []
+
+    def test_no_player_id_empty(self, monkeypatch):
+        monkeypatch.setattr(pe, "_nhl_player", lambda name: (None, "", None))
+        assert pe._fetch_nhl_stat_values(
+            "X", "player_shots_on_goal", "icehockey_nhl") == []
+
+    def test_dispatch_routes_nhl(self, monkeypatch):
+        self._stub(monkeypatch)
+        assert pe.fetch_recent_stat_values(
+            "Connor McDavid", "player_goals", "icehockey_nhl") == [0.0, 1.0, 0.0]

@@ -900,6 +900,8 @@ def fetch_recent_stat_values(player_name: str, market_key: str, sport_key: str,
         return _fetch_mlb_stat_values(player_name, market_key, sport_key, limit)
     if sport_key == "americanfootball_nfl":
         return _fetch_nfl_stat_values(player_name, market_key, sport_key, limit)
+    if sport_key == "icehockey_nhl":
+        return _fetch_nhl_stat_values(player_name, market_key, sport_key, limit)
     return _fetch_espn_stat_values(player_name, market_key, sport_key, limit)
 
 
@@ -1007,6 +1009,104 @@ def _fetch_nfl_stat_values(player_name: str, market_key: str, sport_key: str,
 def _nfl_player_meta(player_name: str):
     """(headshot_url, position) for an NFL player, or (None, '')."""
     return _load_nfl_stats()["meta"].get(_norm_name(player_name), (None, ""))
+
+
+# ─────────────────────────────────────────
+# NHL game-log data layer — free official NHL API (api-web.nhle.com, no key).
+# ESPN blocks our server; the NHL's own API is clean and open, like MLB statsapi.
+# ─────────────────────────────────────────
+
+NHL_SEARCH_URL  = "https://search.d3.nhle.com/api/v1/search/player"
+NHL_GAMELOG_URL = "https://api-web.nhle.com/v1/player/{pid}/game-log/{season}/2"  # 2 = regular season
+NHL_LANDING_URL = "https://api-web.nhle.com/v1/player/{pid}/landing"
+
+# internal market_key → NHL game-log field.
+NHL_STAT_MAP = {
+    "player_points":           "points",
+    "player_goals":            "goals",
+    "player_assists":          "assists",
+    "player_shots_on_goal":    "shots",
+    "player_power_play_points":"powerPlayPoints",
+}
+
+_NHL_PLAYER_CACHE: dict = {}   # norm name → (playerId, position, headshot_url)
+
+
+def _nhl_seasons() -> list:
+    """Season strings to try, newest first (a season spans two years, e.g. 20242025)."""
+    today = date.today()
+    start = today.year if today.month >= 10 else today.year - 1
+    return [f"{s}{s + 1}" for s in (start, start - 1)]
+
+
+def _nhl_player(name: str):
+    """(playerId, position, headshot_url) for an NHL player by name. Cached."""
+    key = _norm_name(name)
+    if key in _NHL_PLAYER_CACHE:
+        return _NHL_PLAYER_CACHE[key]
+    pid, pos, hs = None, "", None
+    try:
+        r = requests.get(NHL_SEARCH_URL, params={"culture": "en-us", "q": name, "limit": 5},
+                         headers=ESPN_HDR, timeout=8)
+        if r.status_code == 200:
+            arr = r.json()
+            match = next((p for p in arr if _norm_name(p.get("name", "")) == key), None) \
+                    or (arr[0] if arr else None)
+            if match:
+                pid = match.get("playerId")
+                pos = match.get("positionCode", "")
+    except requests.exceptions.RequestException:
+        pass
+    if pid:
+        try:
+            r = requests.get(NHL_LANDING_URL.format(pid=pid), headers=ESPN_HDR, timeout=8)
+            if r.status_code == 200:
+                hs = r.json().get("headshot")
+        except requests.exceptions.RequestException:
+            pass
+    res = (pid, pos, hs)
+    _NHL_PLAYER_CACHE[key] = res
+    return res
+
+
+def _fetch_nhl_stat_values(player_name: str, market_key: str, sport_key: str,
+                           limit: int = 10) -> list:
+    """Recent per-game values for an NHL player's stat, from the free NHL API."""
+    field = NHL_STAT_MAP.get(market_key)
+    if not field:
+        return []
+    pid, _, _ = _nhl_player(player_name)
+    if not pid:
+        return []
+    for season in _nhl_seasons():
+        try:
+            r = requests.get(NHL_GAMELOG_URL.format(pid=pid, season=season),
+                             headers=ESPN_HDR, timeout=8)
+            if r.status_code != 200:
+                continue
+            games = r.json().get("gameLog", [])
+            if not games:
+                continue
+            values = []
+            for g in reversed(games):   # API is newest-first → oldest-first for recency weighting
+                v = g.get(field)
+                if v is None:
+                    continue
+                try:
+                    values.append(float(v))
+                except (ValueError, TypeError):
+                    continue
+            if values:
+                return values[-limit:] if limit else values
+        except requests.exceptions.RequestException:
+            continue
+    return []
+
+
+def _nhl_player_meta(player_name: str):
+    """(headshot_url, position) for an NHL player."""
+    _, pos, hs = _nhl_player(player_name)
+    return (hs, pos or "NHL")
 
 
 def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
@@ -2350,6 +2450,11 @@ PROP_MARKET_CAP = {
     "player_pass_attempts":       6,
     "player_pass_interceptions":  6,
     "player_1st_td":              8,
+    # NHL
+    "player_shots_on_goal":      12,
+    "player_points":             10,
+    "player_goals":              10,
+    "player_assists":            10,
 }
 
 
@@ -2377,6 +2482,9 @@ def _player_meta(sport_key, name):
     if sport_key == "americanfootball_nfl":
         hs, pos = _nfl_player_meta(name)
         return {"headshot_url": hs, "role": pos or "NFL"}
+    if sport_key == "icehockey_nhl":
+        hs, pos = _nhl_player_meta(name)
+        return {"headshot_url": hs, "role": pos or "NHL"}
     return {"headshot_url": None, "role": ""}
 
 
@@ -2502,6 +2610,8 @@ def generate_prop_board(sport_key: str) -> list:
         return _build_mlb_board()
     if sport_key == "americanfootball_nfl":
         return _build_nfl_board()
+    if sport_key == "icehockey_nhl":
+        return _build_nhl_board()
     return []
 
 
@@ -2578,6 +2688,40 @@ def _build_nfl_board() -> list:
             cards += _line_derived_cards(sport_key, g, props_raw, NFL_BOARD_MARKETS,
                                          seen, NFL_PLAYERS_PER_GAME)
             cards += _first_td_cards(sport_key, g, props_raw, seen)
+    return _finalize_board(cards)
+
+
+# NHL markets shown on the board (the most-bet skater props).
+NHL_BOARD_MARKETS = [
+    ("player_shots_on_goal", "Shots"),
+    ("player_points",        "Points"),
+    ("player_goals",         "Goals"),
+    ("player_assists",       "Assists"),
+]
+NHL_PLAYERS_PER_GAME = 12   # cap per market per game — bounds the background build
+
+
+def _build_nhl_board() -> list:
+    """NHL: shots on goal, points, goals, assists (skater props).
+
+    Players come from the book's posted lines; projections from the free NHL API.
+    """
+    sport_key = "icehockey_nhl"
+    games = get_game_lines(sport_key)
+    if not games:
+        return []
+    markets = [_oddsapi_market_key(m) for m, _ in NHL_BOARD_MARKETS]
+
+    cards, seen = [], set()
+    for g in games:
+        try:
+            props_raw = get_event_props(sport_key, g["id"], markets)
+        except Exception as e:
+            print(f"[PropJunkie] no props for event {g['id']}: {e}")
+            continue
+        if props_raw:
+            cards += _line_derived_cards(sport_key, g, props_raw, NHL_BOARD_MARKETS,
+                                         seen, NHL_PLAYERS_PER_GAME)
     return _finalize_board(cards)
 
 

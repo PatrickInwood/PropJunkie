@@ -180,7 +180,7 @@ _CSP = "; ".join([
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     # team logos (ESPN) and player headshots (MLB)
-    "img-src 'self' data: https://a.espncdn.com https://midfield.mlbstatic.com https://img.mlbstatic.com https://static.www.nfl.com",
+    "img-src 'self' data: https://a.espncdn.com https://midfield.mlbstatic.com https://img.mlbstatic.com https://static.www.nfl.com https://assets.nhle.com",
     "connect-src 'self'",
 ])
 
