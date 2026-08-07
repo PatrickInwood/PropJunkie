@@ -55,6 +55,8 @@
         .nav-links { display: flex; align-items: center; gap: 32px; }
         .nav-links a { font-size: 14px; color: var(--muted); transition: color 0.15s; }
         .nav-links a:hover { color: var(--text); }
+        .nav-links a.nav-primary { color: var(--accent); font-weight: 700; }
+        .nav-links a.nav-primary:hover { color: var(--accent-hover); }
         .nav-text-links { display: flex; align-items: center; gap: 28px; }
         .btn-nav {
             padding: 8px 20px;
@@ -516,6 +518,7 @@
     <div class="nav-links">
         <div class="nav-text-links">
             <a href="#features">Features</a>
+            <a href="/props" class="nav-primary">The Board</a>
             <a href="/lines">Live Lines</a>
             <a href="/slate">Slate</a>
             <a href="/record">Record</a>
@@ -539,6 +542,7 @@
 </nav>
 <div class="mobile-nav" id="mobileNav">
     <a href="#features" onclick="closeMobileNav()">Features</a>
+    <a href="/props" onclick="closeMobileNav()">The Board</a>
     <a href="/lines" onclick="closeMobileNav()">Live Lines</a>
     <a href="/slate" onclick="closeMobileNav()">Slate</a>
     <a href="/record" onclick="closeMobileNav()">Record</a>
