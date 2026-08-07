@@ -71,6 +71,11 @@
         .section-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px;
             color:var(--accent); margin:8px 0 12px; }
 
+        /* Record mode toggle */
+        .rec-toggle { display:inline-flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; margin-bottom:22px; }
+        .rt { background:transparent; border:none; color:var(--muted); font-size:13px; font-weight:700; padding:8px 16px; border-radius:7px; cursor:pointer; }
+        .rt.active { background:var(--accent); color:#0c0f0a; }
+        html[data-theme="light"] .rt.active { color:#fff; }
         /* History table */
         .history { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
         .hrow { display:grid; grid-template-columns:64px 1fr 130px 70px 64px; gap:10px; align-items:center;
@@ -121,8 +126,12 @@
 </header>
 
 <div class="container">
-    <div class="page-title">Model Record</div>
-    <div class="page-subtitle">Every ⭐ model lean, graded against the final score. No cherry-picking — wins and losses both count.</div>
+    <div class="page-title">Our Record</div>
+    <div class="page-subtitle">Every lean graded against what actually happened. No cherry-picking — wins and losses both count.</div>
+    <div class="rec-toggle">
+        <button class="rt active" id="rtProps" onclick="setMode('props')">The Board · Props</button>
+        <button class="rt" id="rtGame" onclick="setMode('game')">Game Model</button>
+    </div>
     <div id="content"><div class="loading">Loading record…</div></div>
     <div class="disclaimer">Results are graded automatically once each game is final. PropJunkie's leans are informational, recent-form models — a lean, not a lock. For entertainment; 18+. Bet responsibly.</div>
 </div>
@@ -157,23 +166,77 @@
             <div class="val">${rec(r)}<span class="p">${pct(r)}</span></div>${ru}</div>`;
     }
 
+    let mode = 'props';
+    function setMode(m){
+        if(m===mode) return;
+        mode = m;
+        document.getElementById('rtProps').classList.toggle('active', m==='props');
+        document.getElementById('rtGame').classList.toggle('active', m==='game');
+        load();
+    }
+
     async function load(){
         const el = document.getElementById('content');
+        el.innerHTML = `<div class="loading">Loading record…</div>`;
+        const url = mode==='props' ? '/prop-record-data' : '/record-data';
         let d;
-        try { const res = await fetch(`${API}/record-data`); d = await res.json(); }
+        try { const res = await fetch(`${API}${url}`); d = await res.json(); }
         catch(e){ el.innerHTML = `<div class="empty">Couldn't load the record right now. Try refreshing.</div>`; return; }
+        el.innerHTML = mode==='props' ? renderProps(d) : renderGame(d);
+    }
 
+    function renderProps(d){
         if(!d.graded){
-            el.innerHTML = `<div class="empty">📊 <b>Tracking has restarted${d.since?` (${d.since})`:''}.</b><br>
+            return `<div class="empty">📊 <b>The Board's record starts here.</b><br>
+                Every OVER/UNDER lean we post gets frozen and graded against the player's real result — nothing hidden.<br>
+                Graded picks appear as games finish${d.pending?` — <b>${d.pending}</b> lean${d.pending===1?'':'s'} locked in and pending`:''}.<br>
+                Check back after the next slate.</div>`;
+        }
+        const o = d.overall;
+        const roiHead = (o.units!=null) ? `<span class="roi ${o.units>=0?'pos':'neg'}">${unitsStr(o)}</span>` : '';
+        let html = `
+          <div class="headline">
+            <span class="wl">${rec(o)}</span>
+            <span class="pct">${pct(o)}</span>
+            ${roiHead}
+            <span class="sub">${d.graded} prop lean${d.graded===1?'':'s'} graded${d.pending?` · ${d.pending} pending`:''}</span>
+          </div>
+          ${o.units!=null && o.priced<20 ? `<div class="smallnote">ROI is on ${o.priced} graded lean${o.priced===1?'':'s'} at a flat 1 unit each — an early, small sample. Break-even is ~52.4% at −110.</div>` : ''}
+          <div class="stat-grid">${statCard('Last 10', d.last10)}`;
+        for(const s of Object.keys(d.by_sport || {})) html += statCard(s, d.by_sport[s]);
+        html += `</div>`;
+
+        const markets = Object.keys(d.by_market || {});
+        if(markets.length){
+            html += `<div class="section-title">By Market</div><div class="stat-grid">`;
+            for(const m of markets) html += statCard(m, d.by_market[m]);
+            html += `</div>`;
+        }
+
+        html += `<div class="section-title">History</div><div class="history">
+            <div class="hrow head"><div>Date</div><div>Player · Market</div><div>Pick</div><div>Actual</div><div>Result</div></div>`;
+        for(const h of d.history){
+            html += `<div class="hrow">
+                <div class="hdate">${h.date}</div>
+                <div class="hmatch">${h.player} · ${h.market}</div>
+                <div class="hpick">${h.pick}</div>
+                <div class="hscore">${h.actual!=null?h.actual:''}</div>
+                <div class="res ${h.result}">${h.result.toUpperCase()}</div>
+            </div>`;
+        }
+        html += `</div>`;
+        return html;
+    }
+
+    function renderGame(d){
+        if(!d.graded){
+            return `<div class="empty">📊 <b>Tracking has restarted${d.since?` (${d.since})`:''}.</b><br>
                 The model was just made more selective, so the record was reset to measure it cleanly.<br>
                 Graded results appear here as games finish${d.pending?` — ${d.pending} leans are locked in and pending`:''}.<br>
                 Check back after tonight's slate.</div>`;
-            return;
         }
-
         const o = d.overall;
-        const roiHead = (o.units!=null)
-            ? `<span class="roi ${o.units>=0?'pos':'neg'}">${unitsStr(o)}</span>` : '';
+        const roiHead = (o.units!=null) ? `<span class="roi ${o.units>=0?'pos':'neg'}">${unitsStr(o)}</span>` : '';
         let html = `
           <div class="headline">
             <span class="wl">${rec(o)}</span>
@@ -209,7 +272,7 @@
             </div>`;
         }
         html += `</div>`;
-        el.innerHTML = html;
+        return html;
     }
     load();
 </script>
