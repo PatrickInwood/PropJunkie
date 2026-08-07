@@ -549,7 +549,7 @@ _PROP_BUILD_TIMEOUT = 600   # a build claim older than this is treated as dead â
 # Bump when the board's shape or model math changes â€” a stored board stamped with
 # an older version is treated as stale and rebuilt (and not served meanwhile), so
 # a model fix reaches users without waiting out the TTL.
-_PROP_MODEL_VERSION = 4
+_PROP_MODEL_VERSION = 5
 
 
 def _parse_board(raw):

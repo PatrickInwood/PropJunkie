@@ -264,8 +264,8 @@
               </div>
             </div>
             <div class="proj-box">
-              <div class="proj-label">Projection</div>
-              <div class="proj-num">${c.projection}</div>
+              <div class="proj-label">${c.scorer ? 'Our odds' : 'Projection'}</div>
+              <div class="proj-num">${c.scorer ? c.projection + '%' : c.projection}</div>
               <div class="proj-mkt">${c.market}</div>
             </div>
           </div>
@@ -286,6 +286,24 @@
     // only when the edge clears our threshold; otherwise we show the line and
     // say there's no edge. Projection-only when the book hasn't posted a line.
     function edgeBlock(c) {
+        // First-TD scorer cards: yes/no market, so no over/under line — show our
+        // estimated probability vs the book's implied, and a lean only on an edge.
+        if (c.scorer) {
+            if (!c.lean) {
+                return `<div class="edge-row none">To score 1st TD · ${oddsFmt(c.odds)}${c.best_book ? ' · ' + c.best_book : ''} · our <b>${c.projection}%</b> vs ${c.implied_prob_pct}% implied — no edge.</div>`;
+            }
+            return `
+            <div class="edge-row">
+              <div>
+                <div class="line-lab">To score 1st TD</div>
+                <div class="line-val">${oddsFmt(c.odds)}${c.best_book ? ' · ' + c.best_book : ''}</div>
+              </div>
+              <div class="edge-right">
+                <span class="lean-pill lean-over">1ST TD ✓</span>
+                <div class="edge-meta"><span class="edge-pct over">+${c.edge_pct}% edge</span> · ${c.projection}% vs ${c.implied_prob_pct}% implied</div>
+              </div>
+            </div>`;
+        }
         if (c.line == null) {
             return `<div class="edge-row none">No book line posted yet — projection only.</div>`;
         }

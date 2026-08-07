@@ -643,3 +643,44 @@ class TestNflStatValues:
         self._stub(monkeypatch)
         assert pe.fetch_recent_stat_values(
             "Patrick Mahomes", "player_pass_yds", "americanfootball_nfl") == [250.0, 300.0]
+
+
+# ─────────────────────────────────────────
+# FIRST-TD SCORER — separate model (not the over/under model)
+# ─────────────────────────────────────────
+
+def _first_td_props(price, player="Star Player", book="DK"):
+    return {"bookmakers": [{"title": book, "markets": [
+        {"key": "player_1st_td", "outcomes": [
+            {"description": player, "name": player, "price": price}]}]}]}
+
+
+class TestFirstTdModel:
+    def test_anytime_rate_weighted_fraction(self):
+        # all games scored → rate 1.0; none → 0.0
+        assert pe._anytime_td_rate([1, 1, 1]) == 1.0
+        assert pe._anytime_td_rate([0, 0, 0]) == 0.0
+        assert pe._anytime_td_rate([]) is None
+
+    def test_no_price_returns_none(self):
+        # player has games but the book posted no 1st-TD price → None
+        assert pe._first_td_edge("Star Player", [1, 0, 1, 0, 1], {"bookmakers": []}) is None
+
+    def test_high_scorer_long_odds_leans_yes(self):
+        # scores every game, but the book prices it long (+2000 ≈ 4.8%) → clear edge
+        info = pe._first_td_edge("Star Player", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                 _first_td_props(2000))
+        assert info is not None and info["scorer"] is True
+        assert info["lean"] == "yes"
+        assert info["edge_pct"] > 0
+        assert info["line"] is None            # yes/no market, no over/under line
+
+    def test_well_priced_scorer_no_lean(self):
+        # scores often but the book prices it fairly (+400) → our model agrees, no edge
+        info = pe._first_td_edge("Star Player", [1, 0, 1, 1, 0, 1, 0, 1, 1, 0],
+                                 _first_td_props(400))
+        assert info["lean"] is None
+
+    def test_edge_never_exceeds_cap(self):
+        info = pe._first_td_edge("Star Player", [1] * 10, _first_td_props(9000))
+        assert info["edge_pct"] <= pe.PROP_EDGE_CAP * 100

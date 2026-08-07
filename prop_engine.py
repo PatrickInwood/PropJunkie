@@ -924,6 +924,7 @@ NFL_STAT_MAP = {
     "player_reception_yds":     "receiving_yards",
     "player_receptions":        "receptions",
     "player_reception_tds":     "receiving_tds",
+    "player_rush_reception_yds":("rushing_yards", "receiving_yards"),
     "player_anytime_td":        ("rushing_tds", "receiving_tds", "special_teams_tds"),
 }
 
@@ -2251,21 +2252,104 @@ def _prop_edge(projection, recent_values, props: list, sport_key: str, market_ke
     }
 
 
-# Batter markets shown on the board (the most-bet MLB batter props), as
-# (internal key, display label). Pitcher strikeouts is handled separately.
+# ── First-TD scorer: a SEPARATE model (NOT the over/under recency model) ──
+# "To score the game's first TD" is a yes/no market, so there's no line to beat.
+# We estimate P(scores first TD) ≈ recent anytime-TD rate × FIRST_TD_SHARE (a game
+# has several TDs, so a given scorer is only sometimes the first), then anchor hard
+# to the book's implied price. It's a noisy market, so we lean only on clear gaps
+# and always flag these cards as lower-confidence.
+FIRST_TD_SHARE = 0.22          # rough P(a game-scorer's TD is the game's first)
+FIRST_TD_MODEL_WEIGHT = 0.25   # trust in our estimate vs the book's implied price
+
+
+def _anytime_td_rate(recent_td_values):
+    """Recency-weighted fraction of recent games in which the player scored a TD."""
+    if not recent_td_values:
+        return None
+    n = len(recent_td_values)
+    wts = [0.9 ** (n - 1 - i) for i in range(n)]
+    tw = sum(wts)
+    return (sum(w for v, w in zip(recent_td_values, wts) if v > 0) / tw) if tw else None
+
+
+def _first_td_price(props_raw, player_name):
+    """Best (highest) 'to score the first TD' American price for a player, (price, book)."""
+    best = None
+    for book in (props_raw or {}).get("bookmakers", []):
+        for market in book.get("markets", []):
+            if market.get("key") != "player_1st_td":
+                continue
+            for o in market.get("outcomes", []):
+                who = o.get("description") or o.get("name") or ""
+                if player_name.lower() in who.lower():
+                    price = o.get("price")
+                    if price is not None and (best is None or price > best[0]):
+                        best = (price, book.get("title"))
+    return best
+
+
+def _first_td_edge(player_name, recent_td_values, props_raw):
+    """Separate first-TD-scorer model → edge vs the book's implied price. None if no price."""
+    price = _first_td_price(props_raw, player_name)
+    rate = _anytime_td_rate(recent_td_values)
+    if not price or rate is None:
+        return None
+    odds, book = price
+    implied = american_to_prob(odds)
+    model_p = rate * FIRST_TD_SHARE
+    blended = FIRST_TD_MODEL_WEIGHT * model_p + (1 - FIRST_TD_MODEL_WEIGHT) * implied
+    edge = PROP_EDGE_CAP * math.tanh(max(0.0, blended - implied) / PROP_EDGE_CAP)
+    return {
+        "line": None, "scorer": True,
+        "lean": "yes" if edge >= PROP_LEAN_MIN_EDGE else None,
+        "edge_pct": round(edge * 100, 1),
+        "model_prob_pct": round(blended * 100, 1),
+        "implied_prob_pct": round(implied * 100, 1),
+        "odds": odds, "over_odds": None, "under_odds": None, "best_book": book,
+    }
+
+
+# MLB board markets as (internal key, display label).
+# Pitcher props run off the probable starters; batter props are derived from the
+# book's posted line list.
+MLB_PITCHER_MARKETS = [
+    ("player_pitcher_strikeouts", "Strikeouts"),
+    ("player_pitcher_outs",       "Outs"),
+]
 MLB_BATTER_MARKETS = [
     ("player_batter_hits",        "Hits"),
     ("player_batter_total_bases", "Total Bases"),
     ("player_batter_home_runs",   "Home Runs"),
+    ("player_batter_rbis",        "RBIs"),
+    ("player_batter_runs_scored", "Runs"),
+    ("player_hits_runs_rbis",     "H+R+RBI"),
 ]
 MLB_BATTERS_PER_GAME = 8    # cap per market per game — bounds the background build
 PROP_BOARD_MAX = 60         # cap the whole board (kept by edge) so the page stays snappy
 # Per-market caps so no single market dominates the board (keeps a healthy mix).
+# Anything not listed uses the default (12) in _finalize_board.
 PROP_MARKET_CAP = {
-    "player_pitcher_strikeouts": 18,
-    "player_batter_total_bases": 16,
-    "player_batter_hits":        14,
-    "player_batter_home_runs":   12,
+    # MLB
+    "player_pitcher_strikeouts": 12,
+    "player_pitcher_outs":        8,
+    "player_batter_total_bases": 10,
+    "player_batter_hits":        10,
+    "player_batter_home_runs":    8,
+    "player_batter_rbis":         8,
+    "player_batter_runs_scored":  8,
+    "player_hits_runs_rbis":      8,
+    # NFL
+    "player_pass_yds":           10,
+    "player_reception_yds":      10,
+    "player_rush_yds":           10,
+    "player_receptions":         10,
+    "player_pass_tds":            8,
+    "player_anytime_td":         10,
+    "player_rush_reception_yds": 10,
+    "player_pass_completions":    6,
+    "player_pass_attempts":       6,
+    "player_pass_interceptions":  6,
+    "player_1st_td":              8,
 }
 
 
@@ -2329,12 +2413,16 @@ def _prop_card(name, role, market_label, market_key, g, proj, line_info,
 
 # NFL markets shown on the board (the most-bet skill-position props).
 NFL_BOARD_MARKETS = [
-    ("player_pass_yds",      "Pass Yds"),
-    ("player_rush_yds",      "Rush Yds"),
-    ("player_reception_yds", "Rec Yds"),
-    ("player_receptions",    "Receptions"),
-    ("player_pass_tds",      "Pass TDs"),
-    ("player_anytime_td",    "Anytime TD"),
+    ("player_pass_yds",          "Pass Yds"),
+    ("player_rush_yds",          "Rush Yds"),
+    ("player_reception_yds",     "Rec Yds"),
+    ("player_receptions",        "Receptions"),
+    ("player_pass_tds",          "Pass TDs"),
+    ("player_anytime_td",        "Anytime TD"),
+    ("player_rush_reception_yds","Rush+Rec Yds"),
+    ("player_pass_completions",  "Completions"),
+    ("player_pass_attempts",     "Pass Att"),
+    ("player_pass_interceptions","Interceptions"),
 ]
 NFL_PLAYERS_PER_GAME = 12   # cap per market per game — bounds the background build
 
@@ -2359,6 +2447,30 @@ def _line_derived_cards(sport_key, g, props_raw, market_specs, seen, per_game_ca
             meta = _player_meta(sport_key, pname)
             out.append(_prop_card(pname, meta["role"], label, internal_mkt, g, proj,
                                   line_info, headshot_url=meta["headshot_url"]))
+    return out
+
+
+def _first_td_cards(sport_key, g, props_raw, seen, per_game_cap=8):
+    """First-TD-scorer cards, using the separate scorer model (NFL)."""
+    out = []
+    for pname in _players_in_market(props_raw, "player_1st_td", per_game_cap):
+        if ("player_1st_td", pname) in seen:
+            continue
+        seen.add(("player_1st_td", pname))
+        td_vals = fetch_recent_stat_values(pname, "player_anytime_td", sport_key, limit=10)
+        if len(td_vals) < PROP_EDGE_MIN_GAMES:
+            continue
+        info = _first_td_edge(pname, td_vals, props_raw)
+        if not info:
+            continue
+        meta = _player_meta(sport_key, pname)
+        proj = {"projection": info["model_prob_pct"], "games_used": len(td_vals),
+                "recent_values": td_vals, "low_confidence": True}  # scorer model: always caution
+        card = _prop_card(pname, meta["role"], "1st TD", "player_1st_td", g, proj, info,
+                          headshot_url=meta["headshot_url"])
+        card["scorer"] = True
+        card["implied_prob_pct"] = info.get("implied_prob_pct")
+        out.append(card)
     return out
 
 
@@ -2401,7 +2513,8 @@ def _build_mlb_board() -> list:
         return []
     sp_map, _ = get_probable_pitchers(sport_key)
     # One Odds API call per game for every market we show (batched = fewer credits).
-    markets = ["pitcher_strikeouts"] + [_oddsapi_market_key(m) for m, _ in MLB_BATTER_MARKETS]
+    markets = [_oddsapi_market_key(m) for m, _ in MLB_PITCHER_MARKETS] + \
+              [_oddsapi_market_key(m) for m, _ in MLB_BATTER_MARKETS]
 
     cards, seen = [], set()
     for g in games:
@@ -2411,26 +2524,29 @@ def _build_mlb_board() -> list:
         except Exception as e:
             print(f"[PropJunkie] no props for event {g['id']}: {e}")
 
-        # ── Starting-pitcher strikeouts (probable pitchers, with ERA + headshot) ──
+        # ── Starting pitchers (probable starters, with ERA + headshot) ──
         sp = sp_map.get((_norm_team(g["away_team"]), _norm_team(g["home_team"])))
         if sp:
             for who, team, opp in (("away", g["away_team"], g["home_team"]),
                                    ("home", g["home_team"], g["away_team"])):
                 name = sp.get(f"{who}_sp_name")
-                if not name or ("player_pitcher_strikeouts", name) in seen:
+                if not name:
                     continue
-                seen.add(("player_pitcher_strikeouts", name))
-                proj = generate_projection(name, "player_pitcher_strikeouts", sport_key)
-                if proj.get("projection") is None:
-                    continue
-                line_info = _prop_edge(
-                    proj["projection"], proj.get("recent_values") or [],
-                    extract_player_prop(props_raw, name, "pitcher_strikeouts") if props_raw else [],
-                    sport_key, "player_pitcher_strikeouts")
-                cards.append(_prop_card(
-                    name, "SP", "Strikeouts", "player_pitcher_strikeouts", g, proj, line_info,
-                    pid=sp.get(f"{who}_sp_id"), era=sp.get(f"{who}_sp_era"),
-                    matchup=f"{team.split()[-1]} vs {opp.split()[-1]}"))
+                for internal_mkt, label in MLB_PITCHER_MARKETS:
+                    if (internal_mkt, name) in seen:
+                        continue
+                    seen.add((internal_mkt, name))
+                    proj = generate_projection(name, internal_mkt, sport_key)
+                    if proj.get("projection") is None:
+                        continue
+                    line_info = _prop_edge(
+                        proj["projection"], proj.get("recent_values") or [],
+                        extract_player_prop(props_raw, name, _oddsapi_market_key(internal_mkt)) if props_raw else [],
+                        sport_key, internal_mkt)
+                    cards.append(_prop_card(
+                        name, "SP", label, internal_mkt, g, proj, line_info,
+                        pid=sp.get(f"{who}_sp_id"), era=sp.get(f"{who}_sp_era"),
+                        matchup=f"{team.split()[-1]} vs {opp.split()[-1]}"))
 
         # ── Batters (derived from the book's posted lines) ──
         if props_raw:
@@ -2449,7 +2565,7 @@ def _build_nfl_board() -> list:
     games = get_game_lines(sport_key)
     if not games:
         return []
-    markets = [_oddsapi_market_key(m) for m, _ in NFL_BOARD_MARKETS]
+    markets = [_oddsapi_market_key(m) for m, _ in NFL_BOARD_MARKETS] + ["player_1st_td"]
 
     cards, seen = [], set()
     for g in games:
@@ -2461,6 +2577,7 @@ def _build_nfl_board() -> list:
         if props_raw:
             cards += _line_derived_cards(sport_key, g, props_raw, NFL_BOARD_MARKETS,
                                          seen, NFL_PLAYERS_PER_GAME)
+            cards += _first_td_cards(sport_key, g, props_raw, seen)
     return _finalize_board(cards)
 
 
