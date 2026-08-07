@@ -546,6 +546,21 @@ def game_lines(sport):
 # and only ONE build runs at a time (building_since is a cross-worker lock).
 _PROP_BOARD_TTL = 10800
 _PROP_BUILD_TIMEOUT = 600   # a build claim older than this is treated as dead → reclaimable
+# Bump when the board's shape or model math changes — a stored board stamped with
+# an older version is treated as stale and rebuilt (and not served meanwhile), so
+# a model fix reaches users without waiting out the TTL.
+_PROP_MODEL_VERSION = 3
+
+
+def _parse_board(raw):
+    """Return (version, cards) from a stored board. Legacy bare lists → version None."""
+    try:
+        obj = json.loads(raw or "[]")
+    except (ValueError, TypeError):
+        return None, []
+    if isinstance(obj, dict):
+        return obj.get("v"), obj.get("cards", [])
+    return None, obj
 
 
 def _aware(dt):
@@ -593,7 +608,7 @@ def _refresh_prop_board(sport):
             if row is None:
                 row = PropBoard(sport=sport)
                 db.session.add(row)
-            row.data = json.dumps(data)
+            row.data = json.dumps({"v": _PROP_MODEL_VERSION, "cards": data})
             row.updated_at = datetime.now(timezone.utc)
             row.building_since = None
             db.session.commit()
@@ -632,12 +647,15 @@ def prop_predictions(sport):
     now = datetime.now(timezone.utc)
     row = db.session.get(PropBoard, sport)
     if row and row.updated_at:
-        if (now - _aware(row.updated_at)).total_seconds() >= _PROP_BOARD_TTL:
-            _spawn_prop_build(sport)   # refresh in the background; serve stale now
-        try:
-            cards = json.loads(row.data or "[]")
-        except (ValueError, TypeError):
-            cards = []
+        version, cards = _parse_board(row.data)
+        stale = (now - _aware(row.updated_at)).total_seconds() >= _PROP_BOARD_TTL
+        outdated = version != _PROP_MODEL_VERSION
+        if stale or outdated:
+            _spawn_prop_build(sport)   # refresh in the background
+        # Don't serve a board built by an old model version — show 'building'
+        # until the fresh one lands, so a model fix never displays stale math.
+        if outdated:
+            return jsonify({'building': True, 'cards': []})
         return jsonify({'building': False, 'cards': cards})
     _spawn_prop_build(sport)
     return jsonify({'building': True, 'cards': []})
