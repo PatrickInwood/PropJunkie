@@ -475,7 +475,8 @@ def health():
 # ─────────────────────────────────────────
 
 _scores_cache: dict = {}   # (sport, days_from) → {'data': list, 'ts': float}
-_SCORES_TTL = 45           # seconds — still feels live, but caps API burn
+_SCORES_TTL = 90           # seconds — still feels live, but caps paid Odds API
+                           # credit burn while ESPN (free) is blocking us.
 
 @app.route('/scores/<sport>', methods=['GET'])
 @limiter.limit("30 per minute")
