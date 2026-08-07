@@ -202,10 +202,54 @@ def get_game_scores(sport_key: str, days_from: int = 1) -> list:
                     "scores":        scores,
                     "status_detail": type_info.get("shortDetail"),
                 })
-        return games
     except requests.exceptions.RequestException as e:
         print(f"[PropJunkie] ESPN scores error for {sport_key}: {e}")
+        games = []
+
+    if games:
+        return games
+    try:
+        return get_game_scores_oddsapi(sport_key, days_from)
+    except Exception as e:
+        print(f"[PropJunkie] Odds API scores fallback failed for {sport_key}: {e}")
         return []
+
+
+def get_game_scores_oddsapi(sport_key: str, days_from: int = 1) -> list:
+    """Live + recently-completed scores from the Odds API /scores endpoint.
+
+    Fallback for the Lines board when ESPN is blocked. Same shape as
+    get_game_scores so the front end is unchanged.
+    """
+    url = f"{ODDS_API_BASE}/sports/{sport_key}/scores"
+    params = {"apiKey": ODDS_API_KEY,
+              "daysFrom": min(max(int(days_from), 1), 3),
+              "dateFormat": "iso"}
+    resp = requests.get(url, params=params, timeout=10)
+    if resp.status_code in (422, 404):
+        return []
+    _safe_http_raise(resp)
+
+    games = []
+    for ev in resp.json():
+        completed = bool(ev.get("completed"))
+        raw = {s.get("name"): s.get("score") for s in (ev.get("scores") or [])}
+        scores = []
+        if raw:  # scores present once a game starts (live or final)
+            scores = [
+                {"name": ev.get("home_team"), "score": str(raw.get(ev.get("home_team"), ""))},
+                {"name": ev.get("away_team"), "score": str(raw.get(ev.get("away_team"), ""))},
+            ]
+        games.append({
+            "id":            ev.get("id"),
+            "home_team":     ev.get("home_team"),
+            "away_team":     ev.get("away_team"),
+            "commence_time": ev.get("commence_time"),
+            "completed":     completed,
+            "scores":        scores,
+            "status_detail": "Final" if completed else ("In Progress" if scores else ""),
+        })
+    return games
 
 
 def _odds_phase(side: dict, field: str):
@@ -242,10 +286,12 @@ def _spread_line(s):
 
 
 def fetch_final_scores(sport_key: str, yyyymmdd: str) -> dict:
-    """Final scores for one date, keyed by ESPN event id (used to grade picks).
+    """Final scores for one date, keyed by event id (used to grade picks).
 
     {event_id: {'home_score', 'away_score', 'completed'}}. {} on failure.
-    Since our game ids ARE ESPN event ids, picks grade by exact id lookup.
+    ESPN first (ids match ESPN-sourced picks); if ESPN is blocked, fall back to
+    the Odds API /scores endpoint, whose ids match the Odds-API-sourced lines a
+    pick was frozen from — so the same id looks up cleanly either way.
     """
     sport_info = ESPN_SPORT_MAP.get(sport_key)
     if not sport_info:
@@ -255,26 +301,79 @@ def fetch_final_scores(sport_key: str, yyyymmdd: str) -> dict:
     out = {}
     try:
         r = requests.get(url, params={"dates": yyyymmdd}, headers=ESPN_HDR, timeout=8)
-        if r.status_code != 200:
-            return {}
-        for ev in r.json().get("events", []):
-            state = ev.get("status", {}).get("type", {}).get("state")
-            comp = (ev.get("competitions") or [{}])[0]
-            competitors = comp.get("competitors", [])
-            home = next((c for c in competitors if c.get("homeAway") == "home"), None)
-            away = next((c for c in competitors if c.get("homeAway") == "away"), None)
-            if not home or not away:
-                continue
-            try:
-                hs = int(home.get("score"))
-                as_ = int(away.get("score"))
-            except (TypeError, ValueError):
-                continue
-            out[ev.get("id")] = {"home_score": hs, "away_score": as_,
-                                 "completed": state == "post"}
-        return out
+        if r.status_code == 200:
+            for ev in r.json().get("events", []):
+                state = ev.get("status", {}).get("type", {}).get("state")
+                comp = (ev.get("competitions") or [{}])[0]
+                competitors = comp.get("competitors", [])
+                home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not home or not away:
+                    continue
+                try:
+                    hs = int(home.get("score"))
+                    as_ = int(away.get("score"))
+                except (TypeError, ValueError):
+                    continue
+                out[ev.get("id")] = {"home_score": hs, "away_score": as_,
+                                     "completed": state == "post"}
     except requests.exceptions.RequestException:
+        out = {}
+
+    if out:
+        return out
+    # ESPN gave us nothing (blocked, or no games) → Odds API /scores fallback.
+    try:
+        return fetch_final_scores_oddsapi(sport_key, yyyymmdd)
+    except Exception as e:
+        print(f"[PropJunkie] Odds API scores fallback failed for {sport_key}: {e}")
         return {}
+
+
+def fetch_final_scores_oddsapi(sport_key: str, yyyymmdd: str) -> dict:
+    """Final scores for one date from the Odds API /scores endpoint.
+
+    Keyed by the Odds API event id — the same id get_game_lines_oddsapi froze
+    into each pick — so grading matches by exact id lookup. Only games whose
+    US-Eastern date equals yyyymmdd are returned.
+    """
+    try:
+        target = datetime.strptime(yyyymmdd, "%Y%m%d").date()
+    except ValueError:
+        return {}
+    days_ago = (datetime.now(ESPN_TZ).date() - target).days
+    if days_ago < 0:
+        return {}  # can't grade a game that hasn't happened
+    # /scores includes completed games from the last `daysFrom` days (max 3).
+    days_from = min(max(days_ago, 1), 3)
+
+    url = f"{ODDS_API_BASE}/sports/{sport_key}/scores"
+    params = {"apiKey": ODDS_API_KEY, "daysFrom": days_from, "dateFormat": "iso"}
+    resp = requests.get(url, params=params, timeout=10)
+    if resp.status_code in (422, 404):
+        return {}
+    _safe_http_raise(resp)
+
+    out = {}
+    for ev in resp.json():
+        commence = ev.get("commence_time")
+        if not commence:
+            continue
+        try:
+            dt = datetime.fromisoformat(commence.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        if dt.astimezone(ESPN_TZ).strftime("%Y%m%d") != yyyymmdd:
+            continue
+        scores = {s.get("name"): s.get("score") for s in (ev.get("scores") or [])}
+        try:
+            hs = int(scores.get(ev.get("home_team")))
+            as_ = int(scores.get(ev.get("away_team")))
+        except (TypeError, ValueError):
+            continue
+        out[ev.get("id")] = {"home_score": hs, "away_score": as_,
+                             "completed": bool(ev.get("completed"))}
+    return out
 
 
 def get_game_lines(sport_key: str) -> list:
