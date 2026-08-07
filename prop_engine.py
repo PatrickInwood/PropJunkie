@@ -2143,6 +2143,13 @@ MLB_BATTER_MARKETS = [
 ]
 MLB_BATTERS_PER_GAME = 8    # cap per market per game — bounds the background build
 PROP_BOARD_MAX = 60         # cap the whole board (kept by edge) so the page stays snappy
+# Per-market caps so no single market dominates the board (keeps a healthy mix).
+PROP_MARKET_CAP = {
+    "player_pitcher_strikeouts": 18,
+    "player_batter_total_bases": 16,
+    "player_batter_hits":        14,
+    "player_batter_home_runs":   12,
+}
 
 
 def _players_in_market(props_raw: dict, market_key: str, limit: int = None) -> list:
@@ -2258,11 +2265,19 @@ def generate_prop_board(sport_key: str) -> list:
                     bname, "BAT", label, internal_mkt, g, bproj, line_info,
                     pid=_mlb_person_id(bname)))
 
-    # Actionable leans first (biggest edge on top), then the rest by projection;
-    # keep only the top slice so the page stays fast.
-    cards.sort(key=lambda c: (c["lean"] is not None, c["edge_pct"] or 0,
-                              c["projection"]), reverse=True)
-    return cards[:PROP_BOARD_MAX]
+    # Cap each market so one (e.g. total bases) can't crowd out the rest — the
+    # board should show a mix (strikeouts, hits, total bases, HRs). Then take the
+    # top slice overall by edge so the page stays fast.
+    _rank = lambda c: (c["lean"] is not None, c["edge_pct"] or 0, c["projection"])
+    by_market = {}
+    for c in cards:
+        by_market.setdefault(c["market_key"], []).append(c)
+    kept = []
+    for mk, lst in by_market.items():
+        lst.sort(key=_rank, reverse=True)
+        kept.extend(lst[:PROP_MARKET_CAP.get(mk, 12)])
+    kept.sort(key=_rank, reverse=True)
+    return kept[:PROP_BOARD_MAX]
 
 
 # ─────────────────────────────────────────

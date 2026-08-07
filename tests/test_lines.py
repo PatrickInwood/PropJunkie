@@ -64,7 +64,7 @@ class TestPropBoard:
 
     def test_prop_predictions_cached(self, client, monkeypatch):
         import propjunkie_server as srv
-        srv._prop_board_cache.clear()
+        from models import db, PropBoard
         calls = {"n": 0}
 
         def fake(sport):
@@ -75,10 +75,22 @@ class TestPropBoard:
                      "low_confidence": False, "role": "SP", "era": 3.0}]
 
         monkeypatch.setattr(srv, "generate_prop_board", fake)
+        with srv.app.app_context():
+            PropBoard.query.delete()
+            db.session.commit()
+
+        # Build once (what the background thread does), then the route serves the
+        # DB-cached board on every request without rebuilding inside the TTL.
+        srv._refresh_prop_board("baseball_mlb")
+        assert calls["n"] == 1
+
         r1 = client.get("/prop-predictions/baseball_mlb")
         r2 = client.get("/prop-predictions/baseball_mlb")
         assert r1.status_code == 200 and r2.status_code == 200
-        assert calls["n"] == 1   # second request served from cache
+        body = r1.get_json()
+        assert body["building"] is False
+        assert body["cards"][0]["player"] == "Ace"
+        assert calls["n"] == 1   # served from the shared DB cache — no rebuild
 
 
 class TestLinesCache:

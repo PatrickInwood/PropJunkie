@@ -138,6 +138,27 @@ class User(UserMixin, db.Model):
         return f"<User {self.email}>"
 
 
+class PropBoard(db.Model):
+    """The player-prop board JSON, cached in the DB and shared across workers.
+
+    The board is expensive to build (it hits the paid Odds API), so we build it
+    in a background thread and persist it here — one row per sport. Every gunicorn
+    worker reads the same row instead of each keeping its own in-memory copy,
+    which made the board flicker between full and empty and multiplied API spend.
+    `building_since` is a cross-worker lock so only ONE build runs at a time.
+    """
+
+    __tablename__ = "prop_boards"
+
+    sport = db.Column(db.String(40), primary_key=True)
+    data = db.Column(db.Text, nullable=False, default="[]")   # JSON-encoded list of cards
+    updated_at = db.Column(db.DateTime(timezone=True))
+    building_since = db.Column(db.DateTime(timezone=True))     # non-null while a build runs
+
+    def __repr__(self) -> str:
+        return f"<PropBoard {self.sport} updated={self.updated_at}>"
+
+
 class Pick(db.Model):
     """A model 'lean' PropJunkie published, recorded so we can grade our accuracy.
 

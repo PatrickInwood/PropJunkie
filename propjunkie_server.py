@@ -24,9 +24,10 @@ Run in production (Railway):
 import os
 import sys
 import time
+import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_cors import CORS
@@ -36,7 +37,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
 from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks, generate_prop_board, fetch_final_scores
-from models import db, User, Pick
+from models import db, User, Pick, PropBoard
 from forms import (
     SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
 )
@@ -539,34 +540,83 @@ def game_lines(sport):
 # PROP BOARD — player-prop projections (free: projection + recent form only)
 # ─────────────────────────────────────────
 
-_prop_board_cache: dict = {}    # sport → {'data': list, 'ts': float}
-_prop_board_building: set = set()   # sports whose board is being rebuilt right now
-_prop_board_lock = threading.Lock()
 # 3h: player props move slowly, and building hits the PAID Odds API — a long TTL
-# with on-demand refresh keeps credit spend proportional to real traffic.
+# with on-demand refresh keeps credit spend proportional to real traffic. The
+# board is cached in the DB (models.PropBoard) so every worker shares one copy
+# and only ONE build runs at a time (building_since is a cross-worker lock).
 _PROP_BOARD_TTL = 10800
+_PROP_BUILD_TIMEOUT = 600   # a build claim older than this is treated as dead → reclaimable
+
+
+def _aware(dt):
+    """Treat a possibly-naive DB datetime as UTC (SQLite drops tzinfo)."""
+    return dt.replace(tzinfo=timezone.utc) if dt and dt.tzinfo is None else dt
+
+
+def _claim_prop_build(sport) -> bool:
+    """Atomically claim the right to build `sport` across all workers.
+
+    Returns True if this caller won the claim (and should start a build). Uses a
+    conditional UPDATE on building_since so only one worker builds at a time.
+    """
+    now = datetime.now(timezone.utc)
+    stale = now - timedelta(seconds=_PROP_BUILD_TIMEOUT)
+    try:
+        # Make sure a row exists (first ever request for this sport).
+        if db.session.get(PropBoard, sport) is None:
+            try:
+                db.session.add(PropBoard(sport=sport, data="[]", building_since=now))
+                db.session.commit()
+                return True   # created and claimed in one step
+            except IntegrityError:
+                db.session.rollback()   # another worker beat us to creating it
+        # Claim only if nobody is building (or the previous claim went stale).
+        claimed = db.session.query(PropBoard).filter(
+            PropBoard.sport == sport,
+            db.or_(PropBoard.building_since.is_(None),
+                   PropBoard.building_since < stale),
+        ).update({PropBoard.building_since: now}, synchronize_session=False)
+        db.session.commit()
+        return bool(claimed)
+    except Exception:
+        db.session.rollback()
+        logger.exception("Error claiming prop build for %s", sport)
+        return False
 
 
 def _refresh_prop_board(sport):
-    """Build the board and cache it (runs in a background thread)."""
-    try:
-        data = generate_prop_board(sport)
-        _prop_board_cache[sport] = {'data': data, 'ts': time.time()}
-    except Exception:
-        logger.exception("Error building prop board for %s", sport)
-    finally:
-        with _prop_board_lock:
-            _prop_board_building.discard(sport)
+    """Build the board and persist it to the DB (runs in a background thread)."""
+    with app.app_context():
+        try:
+            data = generate_prop_board(sport)
+            row = db.session.get(PropBoard, sport)
+            if row is None:
+                row = PropBoard(sport=sport)
+                db.session.add(row)
+            row.data = json.dumps(data)
+            row.updated_at = datetime.now(timezone.utc)
+            row.building_since = None
+            db.session.commit()
+        except Exception:
+            logger.exception("Error building prop board for %s", sport)
+            db.session.rollback()
+            # Release the claim so a later request can retry.
+            try:
+                row = db.session.get(PropBoard, sport)
+                if row:
+                    row.building_since = None
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+        finally:
+            db.session.remove()
 
 
-def _maybe_refresh_prop_board(sport):
-    """Kick off one background rebuild for a sport (no-op if already building)."""
-    with _prop_board_lock:
-        if sport in _prop_board_building:
-            return
-        _prop_board_building.add(sport)
-    threading.Thread(target=_refresh_prop_board, args=(sport,),
-                     name=f"props-{sport}", daemon=True).start()
+def _spawn_prop_build(sport):
+    """Claim + start a background build if one isn't already running."""
+    if _claim_prop_build(sport):
+        threading.Thread(target=_refresh_prop_board, args=(sport,),
+                         name=f"props-{sport}", daemon=True).start()
 
 
 @app.route('/prop-predictions/<sport>', methods=['GET'])
@@ -574,18 +624,22 @@ def _maybe_refresh_prop_board(sport):
 def prop_predictions(sport):
     """GET /prop-predictions/baseball_mlb — today's player-prop cards.
 
-    Never builds on the request thread (the build is heavy and hits the paid
-    Odds API). Serves the cache instantly and, if it's stale, refreshes it in the
-    background (stale-while-revalidate). On a cold cache, returns {building:true}
-    so the page can show a friendly 'building' state and retry shortly.
+    Never builds on the request thread (heavy + hits the paid Odds API). Serves
+    the DB-cached board instantly and, if it's stale, refreshes in the background
+    (stale-while-revalidate). On a cold cache, returns {building:true} so the page
+    shows a friendly 'building' state and retries shortly.
     """
-    now = time.time()
-    cached = _prop_board_cache.get(sport)
-    if cached:
-        if (now - cached['ts']) >= _PROP_BOARD_TTL:
-            _maybe_refresh_prop_board(sport)   # refresh in the background; serve stale now
-        return jsonify({'building': False, 'cards': cached['data']})
-    _maybe_refresh_prop_board(sport)
+    now = datetime.now(timezone.utc)
+    row = db.session.get(PropBoard, sport)
+    if row and row.updated_at:
+        if (now - _aware(row.updated_at)).total_seconds() >= _PROP_BOARD_TTL:
+            _spawn_prop_build(sport)   # refresh in the background; serve stale now
+        try:
+            cards = json.loads(row.data or "[]")
+        except (ValueError, TypeError):
+            cards = []
+        return jsonify({'building': False, 'cards': cards})
+    _spawn_prop_build(sport)
     return jsonify({'building': True, 'cards': []})
 
 
