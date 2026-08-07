@@ -1620,6 +1620,63 @@ def fetch_recent_results(sport_key: str, lookback_days: int) -> list:
                 })
         except requests.exceptions.RequestException:
             continue
+
+    if results:
+        return results
+    # ESPN gave us nothing (it's blocking our server). The model needs weeks of
+    # history to rate teams — more than the Odds API /scores window (3 days) —
+    # so for MLB fall back to statsapi, which serves any date range for free.
+    if sport_key == "baseball_mlb":
+        try:
+            return fetch_recent_results_statsapi(lookback_days)
+        except Exception as e:
+            print(f"[PropJunkie] statsapi recent-results fallback failed: {e}")
+    return results
+
+
+def fetch_recent_results_statsapi(lookback_days: int) -> list:
+    """MLB final scores over the last N days from statsapi (free, unlimited).
+
+    Same shape as fetch_recent_results. One ranged call instead of one per day.
+    """
+    today = date.today()
+    start = (today - timedelta(days=int(lookback_days))).strftime("%Y-%m-%d")
+    end = today.strftime("%Y-%m-%d")
+    r = requests.get(MLB_SCHEDULE_URL,
+                     params={"sportId": 1, "startDate": start, "endDate": end},
+                     headers=ESPN_HDR, timeout=10)
+    if r.status_code != 200:
+        return []
+    results = []
+    for block in r.json().get("dates", []):
+        try:
+            gday = datetime.strptime(block.get("date"), "%Y-%m-%d").date()
+            days_ago = (today - gday).days
+        except (ValueError, TypeError):
+            days_ago = 1
+        if days_ago < 1:
+            continue  # today's games aren't final yet — skip for team form
+        for g in block.get("games", []):
+            if (g.get("status", {}).get("abstractGameState")) != "Final":
+                continue
+            teams = g.get("teams", {})
+            home = teams.get("home", {}); away = teams.get("away", {})
+            hname = home.get("team", {}).get("name")
+            aname = away.get("team", {}).get("name")
+            if not hname or not aname:
+                continue
+            try:
+                hs = int(home.get("score"))
+                as_ = int(away.get("score"))
+            except (TypeError, ValueError):
+                continue
+            results.append({
+                "home":       hname,
+                "away":       aname,
+                "home_score": hs,
+                "away_score": as_,
+                "days_ago":   days_ago,
+            })
     return results
 
 
