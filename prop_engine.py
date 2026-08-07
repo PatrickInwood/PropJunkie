@@ -356,9 +356,22 @@ def get_game_lines(sport_key: str) -> list:
                         game["totals"] = {"line": line, "over_odds": over_odds, "under_odds": under_odds}
 
                 results.append(game)
-        return results
     except requests.exceptions.RequestException as e:
         print(f"[PropJunkie] ESPN lines error for {sport_key}: {e}")
+        results = []
+
+    if results:
+        return results
+    # ESPN returned nothing (it periodically blocks our server, or there are
+    # genuinely no games) → fall back to the free Odds API, which covers game
+    # markets for every sport we support (NFL/NBA/NHL/MLB).
+    try:
+        fallback = get_game_lines_oddsapi(sport_key)
+        if fallback:
+            print(f"[PropJunkie] ESPN unavailable — using Odds API lines for {sport_key}")
+        return fallback
+    except Exception as e:
+        print(f"[PropJunkie] Odds API lines fallback failed for {sport_key}: {e}")
         return []
 
 
