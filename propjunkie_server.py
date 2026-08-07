@@ -28,6 +28,7 @@ import json
 import logging
 import threading
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_cors import CORS
@@ -36,8 +37,8 @@ from flask_limiter.util import get_remote_address
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from dotenv import load_dotenv
-from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks, generate_prop_board, fetch_final_scores
-from models import db, User, Pick, PropBoard
+from prop_engine import analyze_prop, claude_explain, get_events, scan_props, get_game_lines, get_game_scores, fetch_espn_player_context, fetch_espn_defense_context, generate_projection, generate_game_picks, generate_prop_board, fetch_final_scores, fetch_stat_value_on_date
+from models import db, User, Pick, PropBoard, PropPick
 from forms import (
     SignupForm, LoginForm, LogoutForm, ForgotPasswordForm, ResetPasswordForm, SPORT_CHOICES,
 )
@@ -612,6 +613,7 @@ def _refresh_prop_board(sport):
             row.updated_at = datetime.now(timezone.utc)
             row.building_since = None
             db.session.commit()
+            _snapshot_prop_leans(sport, data)   # freeze today's leans for the record
         except Exception:
             logger.exception("Error building prop board for %s", sport)
             db.session.rollback()
@@ -625,6 +627,78 @@ def _refresh_prop_board(sport):
                 db.session.rollback()
         finally:
             db.session.remove()
+
+
+# US-Pacific: the westmost US zone, so converting a UTC start time to it yields the
+# correct official game date for every US game (no late-night rollover to the next day).
+_GAME_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def _snapshot_prop_leans(sport, cards):
+    """Freeze each actionable over/under lean into a PropPick row (idempotent).
+
+    Skips 'no edge' cards and yes/no scorer props (which we can't grade from game
+    logs). One row per (game, player, market); re-snapshots are no-ops.
+    """
+    now = datetime.now(timezone.utc)
+    added = 0
+    for c in cards:
+        if not c.get("lean") or c.get("line") is None or c.get("scorer"):
+            continue
+        if db.session.query(PropPick.id).filter_by(
+                game_id=c["game_id"], player=c["player"],
+                market_key=c["market_key"]).first():
+            continue
+        ct = None
+        if c.get("commence_time"):
+            try:
+                ct = datetime.fromisoformat(c["commence_time"].replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                ct = None
+        db.session.add(PropPick(
+            sport=sport, game_id=c["game_id"], player=c["player"],
+            market_key=c["market_key"], market=c.get("market"),
+            line=c["line"], side=c["lean"], odds=c.get("odds"),
+            edge=c.get("edge_pct"), model_prob=c.get("model_prob_pct"),
+            book=c.get("best_book"), commence_time=ct, created_at=now))
+        added += 1
+    if added:
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()   # concurrent snapshot — harmless
+
+
+def _grade_pending_prop_picks():
+    """Grade prop leans whose games have finished, against the player's real stat."""
+    try:
+        pending = PropPick.query.filter_by(graded=False).all()
+        if not pending:
+            return
+        now = datetime.now(timezone.utc)
+        changed = False
+        for p in pending:
+            ct = p.commence_time
+            if ct is None:
+                continue
+            if ct.tzinfo is None:
+                ct = ct.replace(tzinfo=timezone.utc)
+            if (now - ct).total_seconds() < 4 * 3600:   # give the game time to finish
+                continue
+            ymd = ct.astimezone(_GAME_TZ).strftime("%Y%m%d")
+            actual = fetch_stat_value_on_date(p.player, p.market_key, p.sport, ymd)
+            if actual is None:
+                continue
+            p.actual = actual
+            p.result = p.grade(actual)
+            p.graded = True
+            p.graded_at = now
+            changed = True
+        if changed:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Error grading prop picks")
 
 
 def _spawn_prop_build(sport):
@@ -877,6 +951,53 @@ def record_data():
     })
 
 
+@app.route('/prop-record-data', methods=['GET'])
+@limiter.limit("30 per minute")
+def prop_record_data():
+    """The Board's graded prop record: overall, last 10, by sport, by market, history."""
+    _grade_pending_prop_picks()
+    graded = (PropPick.query.filter_by(graded=True)
+              .order_by(PropPick.graded_at.desc()).all())
+    pending = PropPick.query.filter_by(graded=False).count()
+
+    by_sport = {}
+    for sk, label in _SPORT_LABELS.items():
+        rows = [p for p in graded if p.sport == sk]
+        if rows:
+            by_sport[label] = _record_from(rows)
+
+    by_market_map = {}
+    for p in graded:
+        by_market_map.setdefault(p.market or p.market_key, []).append(p)
+    by_market = {m: _record_from(rows) for m, rows in
+                 sorted(by_market_map.items(), key=lambda kv: len(kv[1]), reverse=True)}
+
+    def _num(v):
+        return (int(v) if float(v).is_integer() else round(v, 1)) if v is not None else None
+
+    history = [{
+        "sport":  _SPORT_LABELS.get(p.sport, p.sport),
+        "date":   p.commence_time.strftime("%b %-d") if p.commence_time else "",
+        "player": p.player,
+        "market": p.market,
+        "pick":   f"{p.side.upper()} {_num(p.line)}",
+        "edge":   p.edge,
+        "odds":   p.odds,
+        "result": p.result,
+        "actual": _num(p.actual),
+    } for p in graded[:100]]
+
+    return jsonify({
+        "overall":   _record_from(graded),
+        "last10":    _record_from(graded[:10]),
+        "by_sport":  by_sport,
+        "by_market": by_market,
+        "history":   history,
+        "graded":    len(graded),
+        "pending":   pending,
+    })
+
+
 # ─────────────────────────────────────────
 # EVENTS — list today's games
 # ─────────────────────────────────────────
@@ -1114,6 +1235,7 @@ def _background_grader(interval=1800):
         try:
             with app.app_context():
                 _grade_pending_picks()
+                _grade_pending_prop_picks()
         except Exception:
             logger.exception("Background grader run failed")
         time.sleep(interval)

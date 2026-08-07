@@ -1109,6 +1109,72 @@ def _nhl_player_meta(player_name: str):
     return (hs, pos or "NHL")
 
 
+# ─────────────────────────────────────────
+# GRADING — a player's ACTUAL stat in one specific game (for prop-record grading)
+# ─────────────────────────────────────────
+
+def fetch_stat_value_on_date(player_name: str, market_key: str, sport_key: str,
+                             yyyymmdd: str):
+    """The player's real stat value in the game on yyyymmdd. None if not found.
+
+    Used to grade a frozen prop lean against what actually happened.
+    """
+    if sport_key == "baseball_mlb":
+        return _mlb_stat_on_date(player_name, market_key, yyyymmdd)
+    if sport_key == "icehockey_nhl":
+        return _nhl_stat_on_date(player_name, market_key, yyyymmdd)
+    # NFL (nflverse) is weekly rather than dated — grading deferred (offseason).
+    return None
+
+
+def _mlb_stat_on_date(player_name: str, market_key: str, yyyymmdd: str):
+    mapping = MLB_STAT_MAP.get(market_key)
+    if not mapping:
+        return None
+    group, spec = mapping
+    pid = _mlb_person_id(player_name)
+    if not pid:
+        return None
+    target = f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:]}"
+    try:
+        r = requests.get(f"{MLB_STATS_BASE}/people/{pid}/stats",
+                         params={"stats": "gameLog", "group": group, "season": yyyymmdd[:4]},
+                         headers=ESPN_HDR, timeout=8)
+        if r.status_code != 200:
+            return None
+        for blk in r.json().get("stats", []):
+            for s in blk.get("splits", []):
+                if s.get("date") == target:
+                    v = _mlb_stat_value(s.get("stat", {}), spec)
+                    return float(v) if v is not None else None
+    except requests.exceptions.RequestException:
+        return None
+    return None
+
+
+def _nhl_stat_on_date(player_name: str, market_key: str, yyyymmdd: str):
+    field = NHL_STAT_MAP.get(market_key)
+    if not field:
+        return None
+    pid, _, _ = _nhl_player(player_name)
+    if not pid:
+        return None
+    target = f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:]}"
+    for season in _nhl_seasons():
+        try:
+            r = requests.get(NHL_GAMELOG_URL.format(pid=pid, season=season),
+                             headers=ESPN_HDR, timeout=8)
+            if r.status_code != 200:
+                continue
+            for g in r.json().get("gameLog", []):
+                if g.get("gameDate") == target:
+                    v = g.get(field)
+                    return float(v) if v is not None else None
+        except requests.exceptions.RequestException:
+            continue
+    return None
+
+
 def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
                            limit: int = 10) -> list:
     """Recent per-game values from MLB's official free Stats API (no key needed)."""

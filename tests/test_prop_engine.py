@@ -731,3 +731,34 @@ class TestNhlStatValues:
         self._stub(monkeypatch)
         assert pe.fetch_recent_stat_values(
             "Connor McDavid", "player_goals", "icehockey_nhl") == [0.0, 1.0, 0.0]
+
+
+# ─────────────────────────────────────────
+# PROP-PICK GRADING (models.PropPick.grade)
+# ─────────────────────────────────────────
+
+class TestPropPickGrade:
+    def _pick(self, line, side):
+        from models import PropPick
+        return PropPick(sport="baseball_mlb", game_id="g", player="X",
+                        market_key="player_batter_hits", line=line, side=side)
+
+    def test_over_wins_when_actual_above_line(self):
+        assert self._pick(1.5, "over").grade(2.0) == "win"
+
+    def test_over_loses_when_actual_below_line(self):
+        assert self._pick(1.5, "over").grade(1.0) == "loss"
+
+    def test_under_wins_when_actual_below_line(self):
+        assert self._pick(1.5, "under").grade(1.0) == "win"
+
+    def test_whole_line_exact_is_push(self):
+        assert self._pick(2.0, "over").grade(2.0) == "push"
+
+    def test_units_win_dog(self):
+        p = self._pick(1.5, "over"); p.odds = 120; p.result = "win"
+        assert p.units() == pytest.approx(1.2)
+
+    def test_units_loss_is_minus_one(self):
+        p = self._pick(1.5, "over"); p.odds = -110; p.result = "loss"
+        assert p.units() == -1.0

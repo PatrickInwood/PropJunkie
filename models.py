@@ -138,6 +138,72 @@ class User(UserMixin, db.Model):
         return f"<User {self.email}>"
 
 
+class PropPick(db.Model):
+    """A player-prop LEAN The Board published, frozen so we can grade it in public.
+
+    One row per (game, player, market). We snapshot the lean the first time the
+    board flags it and freeze it (line/side/odds/edge), then fill in the result
+    once the game finishes and we can read the player's real stat for that game.
+    Only actionable over/under leans are recorded — 'no edge' cards and yes/no
+    scorer props (which we can't grade from game logs) are not.
+    """
+
+    __tablename__ = "prop_picks"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    sport = db.Column(db.String(40), nullable=False, index=True)
+    game_id = db.Column(db.String(64), nullable=False, index=True)   # Odds API event id
+    player = db.Column(db.String(120), nullable=False)
+    market_key = db.Column(db.String(48), nullable=False)            # internal key
+    market = db.Column(db.String(40))                                # display label
+
+    # The lean, frozen at first flag.
+    line = db.Column(db.Float, nullable=False)
+    side = db.Column(db.String(8), nullable=False)                   # 'over' | 'under'
+    odds = db.Column(db.Float)
+    edge = db.Column(db.Float)                                       # edge % we claimed
+    model_prob = db.Column(db.Float)                                 # our probability %
+    book = db.Column(db.String(40))
+    commence_time = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    # Result, filled once the game is final and the player's stat is available.
+    graded = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    result = db.Column(db.String(8))                                # 'win' | 'loss' | 'push'
+    actual = db.Column(db.Float)                                    # player's real stat that game
+    graded_at = db.Column(db.DateTime(timezone=True))
+
+    __table_args__ = (
+        db.UniqueConstraint("game_id", "player", "market_key", name="uix_prop_pick"),
+    )
+
+    def grade(self, actual: float) -> str:
+        """Return 'win' / 'loss' / 'push' for this lean given the player's actual stat."""
+        if actual == self.line:
+            return "push"
+        went_over = actual > self.line
+        won = went_over if self.side == "over" else not went_over
+        return "win" if won else "loss"
+
+    def units(self):
+        """Profit/loss in units for a flat 1-unit bet at this pick's odds. None if unknown."""
+        if self.odds is None or self.result is None:
+            return None
+        if self.result == "push":
+            return 0.0
+        if self.result == "loss":
+            return -1.0
+        return (self.odds / 100.0) if self.odds > 0 else (100.0 / abs(self.odds))
+
+    def __repr__(self) -> str:
+        return f"<PropPick {self.sport} {self.player} {self.market} {self.side} {self.line}>"
+
+
 class PropBoard(db.Model):
     """The player-prop board JSON, cached in the DB and shared across workers.
 
