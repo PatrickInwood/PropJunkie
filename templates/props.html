@@ -346,13 +346,24 @@
         }</div>`;
     }
 
+    let retryTimer = null;
     async function load(sport) {
         const board = document.getElementById('board');
+        if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
         board.innerHTML = `<div class="loading"><div class="spinner"></div>Loading projections…</div>`;
         try {
             const res = await fetch(`${API}/prop-predictions/${sport}`);
             const data = await res.json();
-            cards = Array.isArray(data) ? data : [];
+            // Server returns {building, cards}; tolerate a bare array too.
+            const building = data && data.building;
+            cards = Array.isArray(data) ? data : (data.cards || []);
+            if (building && !cards.length) {
+                board.innerHTML = `<div class="loading"><div class="spinner"></div>Building today's board — this takes a moment. It'll appear automatically.</div>`;
+                document.getElementById('countBar').style.display = 'none';
+                buildChips();
+                retryTimer = setTimeout(() => { if (selectedSport === sport) load(sport); }, 15000);
+                return;
+            }
             if (!cards.length) { board.innerHTML = `<div class="empty">No games with projections today. Check back closer to game time.</div>`; document.getElementById('countBar').style.display = 'none'; buildChips(); return; }
             buildChips(); render();
         } catch (e) {

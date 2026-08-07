@@ -869,6 +869,27 @@ def _mlb_stat_value(stat: dict, spec):
     return stat.get(spec)
 
 
+_MLB_ID_CACHE: dict = {}   # player name → MLB person id (populated as we fetch stats)
+
+
+def _mlb_person_id(name: str):
+    """MLB person id for a player name (for headshots). Cached; None on failure."""
+    if name in _MLB_ID_CACHE:
+        return _MLB_ID_CACHE[name]
+    pid = None
+    try:
+        r = requests.get(f"{MLB_STATS_BASE}/people/search",
+                         params={"names": name}, headers=ESPN_HDR, timeout=6)
+        if r.status_code == 200:
+            people = r.json().get("people", [])
+            if people:
+                pid = people[0]["id"]
+    except Exception:
+        pid = None
+    _MLB_ID_CACHE[name] = pid
+    return pid
+
+
 def fetch_recent_stat_values(player_name: str, market_key: str, sport_key: str,
                              limit: int = 10) -> list:
     """Return a player's recent numeric values for a stat (oldest → newest).
@@ -898,6 +919,7 @@ def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
         if not people:
             return []
         pid = people[0]["id"]
+        _MLB_ID_CACHE[player_name] = pid   # reused for headshots, no extra lookup
 
         # 2. Pull this season's game log for the right stat group
         r = requests.get(
@@ -2112,14 +2134,70 @@ def _prop_edge(projection, props: list, sport_key: str, market_key: str):
     }
 
 
-def generate_prop_board(sport_key: str) -> list:
-    """A board of player-prop projections for today's games.
+# Batter markets shown on the board (the most-bet MLB batter props), as
+# (internal key, display label). Pitcher strikeouts is handled separately.
+MLB_BATTER_MARKETS = [
+    ("player_batter_hits",        "Hits"),
+    ("player_batter_total_bases", "Total Bases"),
+    ("player_batter_home_runs",   "Home Runs"),
+]
+MLB_BATTERS_PER_GAME = 8    # cap per market per game — bounds the background build
+PROP_BOARD_MAX = 60         # cap the whole board (kept by edge) so the page stays snappy
 
-    v2 (MLB): each game's probable starting pitchers → a strikeout projection
-    (free statsapi game logs) compared against the sportsbook's posted line (paid
-    Odds API) to show a real edge. When no line is posted yet, the card degrades
-    gracefully to projection-only — never a fabricated edge. Cards with an edge
-    sort to the top; projection-only cards follow by projection.
+
+def _players_in_market(props_raw: dict, market_key: str, limit: int = None) -> list:
+    """Ordered, de-duped player names that have a line in a given market."""
+    names, seen = [], set()
+    for book in (props_raw or {}).get("bookmakers", []):
+        for market in book.get("markets", []):
+            if market.get("key") != market_key:
+                continue
+            for o in market.get("outcomes", []):
+                nm = o.get("description")
+                if nm and nm not in seen:
+                    seen.add(nm)
+                    names.append(nm)
+    return names[:limit] if limit else names
+
+
+def _prop_card(name, role, market_label, market_key, g, proj, line_info,
+               pid=None, era=None, matchup=None):
+    """Assemble one prop card (shared by pitcher and batter cards)."""
+    vals = proj.get("recent_values") or []
+    return {
+        "player":         name,
+        "headshot":       (f"https://midfield.mlbstatic.com/v1/people/{pid}/spots/120"
+                           if pid else None),
+        "role":           role,
+        "market":         market_label,
+        "market_key":     market_key,
+        "matchup":        matchup or f"{g['away_team'].split()[-1]} @ {g['home_team'].split()[-1]}",
+        "commence_time":  g["commence_time"],
+        "game_id":        g["id"],
+        "projection":     proj["projection"],
+        "recent":         [int(v) if float(v).is_integer() else v for v in vals[-5:]],
+        "l5_avg":         round(sum(vals[-5:]) / len(vals[-5:]), 1) if vals else None,
+        "l10_avg":        round(sum(vals[-10:]) / len(vals[-10:]), 1) if vals else None,
+        "games_used":     proj["games_used"],
+        "low_confidence": proj["low_confidence"],
+        "era":            era,
+        # Betting line + edge (None when the book hasn't posted this prop).
+        "line":           line_info["line"] if line_info else None,
+        "lean":           line_info["lean"] if line_info else None,
+        "edge_pct":       line_info["edge_pct"] if line_info else None,
+        "odds":           line_info["odds"] if line_info else None,
+        "best_book":      line_info["best_book"] if line_info else None,
+    }
+
+
+def generate_prop_board(sport_key: str) -> list:
+    """A board of player-prop projections + edges for today's games.
+
+    v3 (MLB): starting-pitcher strikeouts AND batter hits / total bases / home
+    runs. Each projection (free statsapi game logs) is compared to the book's
+    posted line (paid Odds API), with the edge regressed toward the market so we
+    never overstate it. Projection-only when no line is posted. Heavy to build
+    (many players), so the server runs it in the background and serves it cached.
     """
     if sport_key != "baseball_mlb":
         return []
@@ -2128,67 +2206,63 @@ def generate_prop_board(sport_key: str) -> list:
         return []
     sp_map, _ = get_probable_pitchers(sport_key)
 
+    # One Odds API call per game for every market we show (batched = fewer credits).
+    markets = ["pitcher_strikeouts"] + [_oddsapi_market_key(m) for m, _ in MLB_BATTER_MARKETS]
+
     cards, seen = [], set()
     for g in games:
-        sp = sp_map.get((_norm_team(g["away_team"]), _norm_team(g["home_team"])))
-        if not sp:
-            continue
-        # One Odds API call per game for the strikeout market → both starters'
-        # lines. Degrades to projection-only if the book/market isn't available.
         props_raw = None
         try:
-            props_raw = get_event_props(sport_key, g["id"], ["pitcher_strikeouts"])
+            props_raw = get_event_props(sport_key, g["id"], markets)
         except Exception as e:
-            print(f"[PropJunkie] no strikeout props for event {g['id']}: {e}")
+            print(f"[PropJunkie] no props for event {g['id']}: {e}")
 
-        for who, team, opp in (("away", g["away_team"], g["home_team"]),
-                               ("home", g["home_team"], g["away_team"])):
-            name = sp.get(f"{who}_sp_name")
-            if not name or name in seen:
-                continue
-            seen.add(name)
-            proj = generate_projection(name, "player_pitcher_strikeouts", sport_key)
-            if proj.get("projection") is None:
-                continue
-            vals = proj.get("recent_values") or []
-            pid = sp.get(f"{who}_sp_id")
+        # ── Starting-pitcher strikeouts ──
+        sp = sp_map.get((_norm_team(g["away_team"]), _norm_team(g["home_team"])))
+        if sp:
+            for who, team, opp in (("away", g["away_team"], g["home_team"]),
+                                   ("home", g["home_team"], g["away_team"])):
+                name = sp.get(f"{who}_sp_name")
+                if not name or ("player_pitcher_strikeouts", name) in seen:
+                    continue
+                seen.add(("player_pitcher_strikeouts", name))
+                proj = generate_projection(name, "player_pitcher_strikeouts", sport_key)
+                if proj.get("projection") is None:
+                    continue
+                line_info = _prop_edge(
+                    proj["projection"],
+                    extract_player_prop(props_raw, name, "pitcher_strikeouts") if props_raw else [],
+                    sport_key, "player_pitcher_strikeouts")
+                cards.append(_prop_card(
+                    name, "SP", "Strikeouts", "player_pitcher_strikeouts", g, proj, line_info,
+                    pid=sp.get(f"{who}_sp_id"), era=sp.get(f"{who}_sp_era"),
+                    matchup=f"{team.split()[-1]} vs {opp.split()[-1]}"))
 
-            line_info = None
-            if props_raw:
-                plist = extract_player_prop(props_raw, name, "pitcher_strikeouts")
-                line_info = _prop_edge(proj["projection"], plist, sport_key,
-                                       "player_pitcher_strikeouts")
+        # ── Batter hits / total bases / home runs ──
+        if not props_raw:
+            continue
+        for internal_mkt, label in MLB_BATTER_MARKETS:
+            oddsapi_mkt = _oddsapi_market_key(internal_mkt)
+            for bname in _players_in_market(props_raw, oddsapi_mkt, MLB_BATTERS_PER_GAME):
+                if (internal_mkt, bname) in seen:
+                    continue
+                seen.add((internal_mkt, bname))
+                bproj = generate_projection(bname, internal_mkt, sport_key)
+                if bproj.get("projection") is None:
+                    continue
+                line_info = _prop_edge(
+                    bproj["projection"],
+                    extract_player_prop(props_raw, bname, oddsapi_mkt),
+                    sport_key, internal_mkt)
+                cards.append(_prop_card(
+                    bname, "BAT", label, internal_mkt, g, bproj, line_info,
+                    pid=_mlb_person_id(bname)))
 
-            cards.append({
-                "player":         name,
-                "headshot":       (f"https://midfield.mlbstatic.com/v1/people/{pid}/spots/120"
-                                   if pid else None),
-                "role":           "SP",
-                "market":         "Strikeouts",
-                "market_key":     "player_pitcher_strikeouts",
-                "team":           team,
-                "opponent":       opp,
-                "matchup":        f"{team.split()[-1]} vs {opp.split()[-1]}",
-                "commence_time":  g["commence_time"],
-                "game_id":        g["id"],
-                "projection":     proj["projection"],
-                "recent":         [int(v) if float(v).is_integer() else v for v in vals[-5:]],
-                "l5_avg":         round(sum(vals[-5:]) / len(vals[-5:]), 1) if vals else None,
-                "l10_avg":        round(sum(vals[-10:]) / len(vals[-10:]), 1) if vals else None,
-                "games_used":     proj["games_used"],
-                "low_confidence": proj["low_confidence"],
-                "era":            sp.get(f"{who}_sp_era"),
-                # Betting line + edge (None when the book hasn't posted this prop).
-                "line":           line_info["line"] if line_info else None,
-                "lean":           line_info["lean"] if line_info else None,
-                "edge_pct":       line_info["edge_pct"] if line_info else None,
-                "odds":           line_info["odds"] if line_info else None,
-                "best_book":      line_info["best_book"] if line_info else None,
-            })
-    # Actionable leans first (biggest edge on top), then everything else by projection.
+    # Actionable leans first (biggest edge on top), then the rest by projection;
+    # keep only the top slice so the page stays fast.
     cards.sort(key=lambda c: (c["lean"] is not None, c["edge_pct"] or 0,
                               c["projection"]), reverse=True)
-    return cards
+    return cards[:PROP_BOARD_MAX]
 
 
 # ─────────────────────────────────────────

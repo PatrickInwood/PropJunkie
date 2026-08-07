@@ -539,24 +539,54 @@ def game_lines(sport):
 # PROP BOARD — player-prop projections (free: projection + recent form only)
 # ─────────────────────────────────────────
 
-_prop_board_cache: dict = {}   # sport → {'data': list, 'ts': float}
-_PROP_BOARD_TTL = 3600         # 1h — projections move slowly, and it's heavy to build
+_prop_board_cache: dict = {}    # sport → {'data': list, 'ts': float}
+_prop_board_building: set = set()   # sports whose board is being rebuilt right now
+_prop_board_lock = threading.Lock()
+# 3h: player props move slowly, and building hits the PAID Odds API — a long TTL
+# with on-demand refresh keeps credit spend proportional to real traffic.
+_PROP_BOARD_TTL = 10800
+
+
+def _refresh_prop_board(sport):
+    """Build the board and cache it (runs in a background thread)."""
+    try:
+        data = generate_prop_board(sport)
+        _prop_board_cache[sport] = {'data': data, 'ts': time.time()}
+    except Exception:
+        logger.exception("Error building prop board for %s", sport)
+    finally:
+        with _prop_board_lock:
+            _prop_board_building.discard(sport)
+
+
+def _maybe_refresh_prop_board(sport):
+    """Kick off one background rebuild for a sport (no-op if already building)."""
+    with _prop_board_lock:
+        if sport in _prop_board_building:
+            return
+        _prop_board_building.add(sport)
+    threading.Thread(target=_refresh_prop_board, args=(sport,),
+                     name=f"props-{sport}", daemon=True).start()
+
 
 @app.route('/prop-predictions/<sport>', methods=['GET'])
 @limiter.limit("20 per minute")
 def prop_predictions(sport):
-    """GET /prop-predictions/baseball_mlb — today's player-prop projection cards."""
+    """GET /prop-predictions/baseball_mlb — today's player-prop cards.
+
+    Never builds on the request thread (the build is heavy and hits the paid
+    Odds API). Serves the cache instantly and, if it's stale, refreshes it in the
+    background (stale-while-revalidate). On a cold cache, returns {building:true}
+    so the page can show a friendly 'building' state and retry shortly.
+    """
     now = time.time()
     cached = _prop_board_cache.get(sport)
-    if cached and (now - cached['ts']) < _PROP_BOARD_TTL:
-        return jsonify(cached['data'])
-    try:
-        data = generate_prop_board(sport)
-        _prop_board_cache[sport] = {'data': data, 'ts': now}
-        return jsonify(data)
-    except Exception:
-        logger.exception("Error generating prop board for %s", sport)
-        return jsonify({'error': _GENERIC_ERROR}), 500
+    if cached:
+        if (now - cached['ts']) >= _PROP_BOARD_TTL:
+            _maybe_refresh_prop_board(sport)   # refresh in the background; serve stale now
+        return jsonify({'building': False, 'cards': cached['data']})
+    _maybe_refresh_prop_board(sport)
+    return jsonify({'building': True, 'cards': []})
 
 
 # ─────────────────────────────────────────
