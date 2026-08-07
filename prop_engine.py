@@ -2064,12 +2064,23 @@ def _oddsapi_market_key(internal_key: str) -> str:
     return _ODDS_API_MARKET_OVERRIDES.get(internal_key, internal_key)
 
 
-def _prop_edge(projection, props: list, sport_key: str, market_key: str):
-    """Compare our projection to the book line → line + edge info. None if no line.
+# Prop-edge humility knobs. A book prop line is sharp — it already prices the
+# opponent, park, weather, and expected innings that our recent-form projection
+# knows nothing about. So we treat the line as a strong prior and trust our own
+# projection only partially. Same philosophy as the market-anchored game model:
+# don't let a naive disagreement masquerade as a huge edge.
+PROP_MODEL_WEIGHT = 0.20   # weight on our projection; 0.80 stays on the book line
+PROP_LEAN_MIN_EDGE = 0.03  # below this, show the line but call no lean
+PROP_EDGE_CAP = 0.12       # guardrail — we never claim more than this
 
-    Anchors to the book with the best Over price (a single coherent book for the
-    line and both prices), removes the vig, and leans the side we have the bigger
-    edge on. edge_pct is our model probability minus the book's no-vig probability.
+
+def _prop_edge(projection, props: list, sport_key: str, market_key: str):
+    """Compare our projection to the book line → line + a *market-anchored* edge.
+
+    Anchors to the book with the best Over price (one coherent book for the line
+    and both prices). Regresses our projection toward the line (PROP_MODEL_WEIGHT)
+    before computing probabilities, removes the vig, caps the edge, and only calls
+    a lean past a minimum. None if there's no usable line.
     """
     if projection is None or not props:
         return None
@@ -2077,18 +2088,21 @@ def _prop_edge(projection, props: list, sport_key: str, market_key: str):
     if not top or top.get("line") is None:
         return None
     line = top["line"]
+    # Regress the naive projection heavily toward the market line.
+    blended = PROP_MODEL_WEIGHT * projection + (1 - PROP_MODEL_WEIGHT) * line
     std = get_std_dev_pct(sport_key, market_key)
-    p_over = calculate_hit_probability(projection, line, std)
+    p_over = calculate_hit_probability(blended, line, std)
     p_under = 1 - p_over
     imp_over, imp_under = remove_vig(top["over_odds"], top["under_odds"])
     edge_over, edge_under = p_over - imp_over, p_under - imp_under
     if edge_over >= edge_under:
-        lean, edge, model_prob, odds = "over", edge_over, p_over, top["over_odds"]
+        side, edge, model_prob, odds = "over", edge_over, p_over, top["over_odds"]
     else:
-        lean, edge, model_prob, odds = "under", edge_under, p_under, top["under_odds"]
+        side, edge, model_prob, odds = "under", edge_under, p_under, top["under_odds"]
+    edge = max(0.0, min(edge, PROP_EDGE_CAP))   # humble: never claim an extreme edge
     return {
         "line":           line,
-        "lean":           lean,
+        "lean":           side if edge >= PROP_LEAN_MIN_EDGE else None,
         "edge_pct":       round(edge * 100, 1),
         "model_prob_pct": round(model_prob * 100, 1),
         "odds":           odds,             # price for the side we lean
@@ -2171,8 +2185,8 @@ def generate_prop_board(sport_key: str) -> list:
                 "odds":           line_info["odds"] if line_info else None,
                 "best_book":      line_info["best_book"] if line_info else None,
             })
-    # Actionable cards (real edge) first, biggest edge on top; then projection-only.
-    cards.sort(key=lambda c: (c["edge_pct"] is not None, c["edge_pct"] or 0,
+    # Actionable leans first (biggest edge on top), then everything else by projection.
+    cards.sort(key=lambda c: (c["lean"] is not None, c["edge_pct"] or 0,
                               c["projection"]), reverse=True)
     return cards
 
