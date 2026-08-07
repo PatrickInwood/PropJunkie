@@ -898,7 +898,114 @@ def fetch_recent_stat_values(player_name: str, market_key: str, sport_key: str,
     """
     if sport_key == "baseball_mlb":
         return _fetch_mlb_stat_values(player_name, market_key, sport_key, limit)
+    if sport_key == "americanfootball_nfl":
+        return _fetch_nfl_stat_values(player_name, market_key, sport_key, limit)
     return _fetch_espn_stat_values(player_name, market_key, sport_key, limit)
+
+
+# ─────────────────────────────────────────
+# NFL game-log data layer — free nflverse weekly player stats (CSV on GitHub).
+# ESPN blocks our server, and there's no clean free per-game NFL API, so we use
+# the community nflverse dataset: one CSV per season of per-player, per-week stats.
+# ─────────────────────────────────────────
+
+_NFLVERSE_URL = ("https://github.com/nflverse/nflverse-data/releases/download/"
+                 "player_stats/stats_player_week_{year}.csv")
+
+# internal market_key → nflverse column, or a tuple of columns to SUM.
+NFL_STAT_MAP = {
+    "player_pass_yds":          "passing_yards",
+    "player_pass_tds":          "passing_tds",
+    "player_pass_completions":  "completions",
+    "player_pass_attempts":     "attempts",
+    "player_pass_interceptions":"passing_interceptions",
+    "player_rush_yds":          "rushing_yards",
+    "player_rush_tds":          "rushing_tds",
+    "player_reception_yds":     "receiving_yards",
+    "player_receptions":        "receptions",
+    "player_reception_tds":     "receiving_tds",
+    "player_anytime_td":        ("rushing_tds", "receiving_tds", "special_teams_tds"),
+}
+
+_NFL_STATS_CACHE: dict = {}   # {'season', 'players':{norm:[rows]}, 'meta':{norm:(headshot,pos)}, 'ts'}
+_NFL_STATS_TTL = 21600        # 6h — nflverse updates after each game slate
+
+
+def _norm_name(name: str) -> str:
+    """Normalize a player name for matching across data sources.
+
+    Lowercases, drops periods/apostrophes, and collapses runs of whitespace so
+    minor formatting differences between the Odds API and nflverse still match.
+    """
+    return " ".join((name or "").lower().replace(".", "").replace("'", "").split())
+
+
+def _load_nfl_stats() -> dict:
+    """Download + parse the newest nflverse per-week player stats, cached in memory.
+
+    Returns {'players': {norm_name: [rows oldest→newest]}, 'meta': {norm: (headshot, pos)}}.
+    Probes from the current season backward to the newest published file.
+    """
+    cached = _NFL_STATS_CACHE.get("data")
+    if cached and (time.time() - _NFL_STATS_CACHE.get("ts", 0)) < _NFL_STATS_TTL:
+        return cached
+
+    import csv, io
+    year = date.today().year
+    text = None
+    for y in range(year, year - 3, -1):   # newest available: this season, else prior
+        try:
+            r = requests.get(_NFLVERSE_URL.format(year=y), headers=ESPN_HDR, timeout=25)
+            if r.status_code == 200 and r.text:
+                text = r.text
+                break
+        except requests.exceptions.RequestException:
+            continue
+    if not text:
+        return _NFL_STATS_CACHE.get("data") or {"players": {}, "meta": {}}
+
+    players, meta = {}, {}
+    for row in csv.DictReader(io.StringIO(text)):
+        if row.get("season_type") not in ("REG", "POST"):
+            continue   # skip preseason — backups / limited snaps distort form
+        name = row.get("player_display_name") or row.get("player_name")
+        if not name:
+            continue
+        key = _norm_name(name)
+        players.setdefault(key, []).append(row)
+        meta[key] = (row.get("headshot_url") or None, row.get("position") or "")
+    # Rows arrive oldest→newest already (week order within the season file).
+    data = {"players": players, "meta": meta}
+    _NFL_STATS_CACHE.update({"data": data, "ts": time.time()})
+    return data
+
+
+def _fetch_nfl_stat_values(player_name: str, market_key: str, sport_key: str,
+                           limit: int = 10) -> list:
+    """Recent per-game values for an NFL player's stat, from nflverse (free)."""
+    spec = NFL_STAT_MAP.get(market_key)
+    if not spec:
+        return []
+    rows = _load_nfl_stats()["players"].get(_norm_name(player_name)) or []
+    values = []
+    for row in rows:
+        if isinstance(spec, tuple):
+            v = sum(float(row.get(k) or 0) for k in spec)
+        else:
+            raw = row.get(spec)
+            if raw in (None, ""):
+                continue
+            try:
+                v = float(raw)
+            except (ValueError, TypeError):
+                continue
+        values.append(v)
+    return values[-limit:] if limit else values
+
+
+def _nfl_player_meta(player_name: str):
+    """(headshot_url, position) for an NFL player, or (None, '')."""
+    return _load_nfl_stats()["meta"].get(_norm_name(player_name), (None, ""))
 
 
 def _fetch_mlb_stat_values(player_name: str, market_key: str, sport_key: str,
@@ -2177,14 +2284,27 @@ def _players_in_market(props_raw: dict, market_key: str, limit: int = None) -> l
     return names[:limit] if limit else names
 
 
+def _player_meta(sport_key, name):
+    """Per-sport display bits for a player: headshot + role label."""
+    if sport_key == "baseball_mlb":
+        pid = _mlb_person_id(name)
+        return {"headshot_url": (f"https://midfield.mlbstatic.com/v1/people/{pid}/spots/120"
+                                 if pid else None), "role": "BAT"}
+    if sport_key == "americanfootball_nfl":
+        hs, pos = _nfl_player_meta(name)
+        return {"headshot_url": hs, "role": pos or "NFL"}
+    return {"headshot_url": None, "role": ""}
+
+
 def _prop_card(name, role, market_label, market_key, g, proj, line_info,
-               pid=None, era=None, matchup=None):
-    """Assemble one prop card (shared by pitcher and batter cards)."""
+               pid=None, era=None, matchup=None, headshot_url=None):
+    """Assemble one prop card (shared across sports/markets)."""
     vals = proj.get("recent_values") or []
+    if headshot_url is None and pid:
+        headshot_url = f"https://midfield.mlbstatic.com/v1/people/{pid}/spots/120"
     return {
         "player":         name,
-        "headshot":       (f"https://midfield.mlbstatic.com/v1/people/{pid}/spots/120"
-                           if pid else None),
+        "headshot":       headshot_url,
         "role":           role,
         "market":         market_label,
         "market_key":     market_key,
@@ -2207,22 +2327,79 @@ def _prop_card(name, role, market_label, market_key, g, proj, line_info,
     }
 
 
-def generate_prop_board(sport_key: str) -> list:
-    """A board of player-prop projections + edges for today's games.
+# NFL markets shown on the board (the most-bet skill-position props).
+NFL_BOARD_MARKETS = [
+    ("player_pass_yds",      "Pass Yds"),
+    ("player_rush_yds",      "Rush Yds"),
+    ("player_reception_yds", "Rec Yds"),
+    ("player_receptions",    "Receptions"),
+    ("player_pass_tds",      "Pass TDs"),
+    ("player_anytime_td",    "Anytime TD"),
+]
+NFL_PLAYERS_PER_GAME = 12   # cap per market per game — bounds the background build
 
-    v3 (MLB): starting-pitcher strikeouts AND batter hits / total bases / home
-    runs. Each projection (free statsapi game logs) is compared to the book's
-    posted line (paid Odds API), with the edge regressed toward the market so we
-    never overstate it. Projection-only when no line is posted. Heavy to build
-    (many players), so the server runs it in the background and serves it cached.
+
+def _line_derived_cards(sport_key, g, props_raw, market_specs, seen, per_game_cap):
+    """Cards for players the book has posted a line for (its list tells us who's
+    in). Projected + edged. Shared by MLB batters and NFL skill players."""
+    out = []
+    for internal_mkt, label in market_specs:
+        oddsapi_mkt = _oddsapi_market_key(internal_mkt)
+        for pname in _players_in_market(props_raw, oddsapi_mkt, per_game_cap):
+            if (internal_mkt, pname) in seen:
+                continue
+            seen.add((internal_mkt, pname))
+            proj = generate_projection(pname, internal_mkt, sport_key)
+            if proj.get("projection") is None:
+                continue
+            line_info = _prop_edge(
+                proj["projection"], proj.get("recent_values") or [],
+                extract_player_prop(props_raw, pname, oddsapi_mkt),
+                sport_key, internal_mkt)
+            meta = _player_meta(sport_key, pname)
+            out.append(_prop_card(pname, meta["role"], label, internal_mkt, g, proj,
+                                  line_info, headshot_url=meta["headshot_url"]))
+    return out
+
+
+def _finalize_board(cards: list) -> list:
+    """Cap each market so one can't crowd out the rest, then take the top slice
+    by edge so the page stays fast."""
+    _rank = lambda c: (c["lean"] is not None, c["edge_pct"] or 0, c["projection"])
+    by_market = {}
+    for c in cards:
+        by_market.setdefault(c["market_key"], []).append(c)
+    kept = []
+    for mk, lst in by_market.items():
+        lst.sort(key=_rank, reverse=True)
+        kept.extend(lst[:PROP_MARKET_CAP.get(mk, 12)])
+    kept.sort(key=_rank, reverse=True)
+    return kept[:PROP_BOARD_MAX]
+
+
+def generate_prop_board(sport_key: str) -> list:
+    """A board of player-prop projections + edges for upcoming games.
+
+    Each projection (free game logs — statsapi for MLB, nflverse for NFL) is
+    compared to the book's posted line (paid Odds API), with the edge regressed
+    toward the market so we never overstate it. Projection-only when no line is
+    posted. Heavy to build (many players), so the server runs it in the background
+    and serves it cached.
     """
-    if sport_key != "baseball_mlb":
-        return []
+    if sport_key == "baseball_mlb":
+        return _build_mlb_board()
+    if sport_key == "americanfootball_nfl":
+        return _build_nfl_board()
+    return []
+
+
+def _build_mlb_board() -> list:
+    """MLB: starting-pitcher strikeouts + batter hits / total bases / home runs."""
+    sport_key = "baseball_mlb"
     games = [g for g in get_game_lines(sport_key) if _is_today_et(g.get("commence_time"))]
     if not games:
         return []
     sp_map, _ = get_probable_pitchers(sport_key)
-
     # One Odds API call per game for every market we show (batched = fewer credits).
     markets = ["pitcher_strikeouts"] + [_oddsapi_market_key(m) for m, _ in MLB_BATTER_MARKETS]
 
@@ -2234,7 +2411,7 @@ def generate_prop_board(sport_key: str) -> list:
         except Exception as e:
             print(f"[PropJunkie] no props for event {g['id']}: {e}")
 
-        # ── Starting-pitcher strikeouts ──
+        # ── Starting-pitcher strikeouts (probable pitchers, with ERA + headshot) ──
         sp = sp_map.get((_norm_team(g["away_team"]), _norm_team(g["home_team"])))
         if sp:
             for who, team, opp in (("away", g["away_team"], g["home_team"]),
@@ -2255,39 +2432,36 @@ def generate_prop_board(sport_key: str) -> list:
                     pid=sp.get(f"{who}_sp_id"), era=sp.get(f"{who}_sp_era"),
                     matchup=f"{team.split()[-1]} vs {opp.split()[-1]}"))
 
-        # ── Batter hits / total bases / home runs ──
-        if not props_raw:
-            continue
-        for internal_mkt, label in MLB_BATTER_MARKETS:
-            oddsapi_mkt = _oddsapi_market_key(internal_mkt)
-            for bname in _players_in_market(props_raw, oddsapi_mkt, MLB_BATTERS_PER_GAME):
-                if (internal_mkt, bname) in seen:
-                    continue
-                seen.add((internal_mkt, bname))
-                bproj = generate_projection(bname, internal_mkt, sport_key)
-                if bproj.get("projection") is None:
-                    continue
-                line_info = _prop_edge(
-                    bproj["projection"], bproj.get("recent_values") or [],
-                    extract_player_prop(props_raw, bname, oddsapi_mkt),
-                    sport_key, internal_mkt)
-                cards.append(_prop_card(
-                    bname, "BAT", label, internal_mkt, g, bproj, line_info,
-                    pid=_mlb_person_id(bname)))
+        # ── Batters (derived from the book's posted lines) ──
+        if props_raw:
+            cards += _line_derived_cards(sport_key, g, props_raw, MLB_BATTER_MARKETS,
+                                         seen, MLB_BATTERS_PER_GAME)
+    return _finalize_board(cards)
 
-    # Cap each market so one (e.g. total bases) can't crowd out the rest — the
-    # board should show a mix (strikeouts, hits, total bases, HRs). Then take the
-    # top slice overall by edge so the page stays fast.
-    _rank = lambda c: (c["lean"] is not None, c["edge_pct"] or 0, c["projection"])
-    by_market = {}
-    for c in cards:
-        by_market.setdefault(c["market_key"], []).append(c)
-    kept = []
-    for mk, lst in by_market.items():
-        lst.sort(key=_rank, reverse=True)
-        kept.extend(lst[:PROP_MARKET_CAP.get(mk, 12)])
-    kept.sort(key=_rank, reverse=True)
-    return kept[:PROP_BOARD_MAX]
+
+def _build_nfl_board() -> list:
+    """NFL: pass / rush / reception yards, receptions, pass TDs, anytime TD.
+
+    Players come from the book's posted lines; projections from nflverse game
+    logs. NFL is weekly, so we show the whole upcoming slate (not just today).
+    """
+    sport_key = "americanfootball_nfl"
+    games = get_game_lines(sport_key)
+    if not games:
+        return []
+    markets = [_oddsapi_market_key(m) for m, _ in NFL_BOARD_MARKETS]
+
+    cards, seen = [], set()
+    for g in games:
+        try:
+            props_raw = get_event_props(sport_key, g["id"], markets)
+        except Exception as e:
+            print(f"[PropJunkie] no props for event {g['id']}: {e}")
+            continue
+        if props_raw:
+            cards += _line_derived_cards(sport_key, g, props_raw, NFL_BOARD_MARKETS,
+                                         seen, NFL_PLAYERS_PER_GAME)
+    return _finalize_board(cards)
 
 
 # ─────────────────────────────────────────

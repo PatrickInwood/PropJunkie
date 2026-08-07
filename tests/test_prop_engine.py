@@ -594,3 +594,52 @@ class TestModelSharpening:
         assert neutral == pytest.approx(8.0, abs=0.2)
         assert coors > neutral                                       # Coors inflates the total
         assert coors == pytest.approx(8.0 * 1.15, abs=0.2)
+
+
+# ─────────────────────────────────────────
+# NFL GAME-LOG LAYER (nflverse) — network mocked
+# ─────────────────────────────────────────
+
+class TestNflStatValues:
+    """_fetch_nfl_stat_values maps markets to nflverse columns (offline stub)."""
+
+    def _stub(self, monkeypatch):
+        data = {
+            "players": {
+                "patrick mahomes": [
+                    {"passing_yards": "250", "passing_tds": "2",
+                     "rushing_tds": "0", "receiving_tds": "0", "special_teams_tds": "0"},
+                    {"passing_yards": "300", "passing_tds": "1",
+                     "rushing_tds": "1", "receiving_tds": "0", "special_teams_tds": "0"},
+                ]
+            },
+            "meta": {"patrick mahomes": ("http://hs", "QB")},
+        }
+        monkeypatch.setattr(pe, "_load_nfl_stats", lambda: data)
+
+    def test_maps_passing_yards(self, monkeypatch):
+        self._stub(monkeypatch)
+        assert pe._fetch_nfl_stat_values(
+            "Patrick Mahomes", "player_pass_yds", "americanfootball_nfl") == [250.0, 300.0]
+
+    def test_anytime_td_sums_rush_rec_special(self, monkeypatch):
+        self._stub(monkeypatch)
+        # game 1: 0 TDs; game 2: 1 rushing TD → [0.0, 1.0]
+        assert pe._fetch_nfl_stat_values(
+            "Patrick Mahomes", "player_anytime_td", "americanfootball_nfl") == [0.0, 1.0]
+
+    def test_unknown_market_returns_empty(self, monkeypatch):
+        self._stub(monkeypatch)
+        assert pe._fetch_nfl_stat_values(
+            "Patrick Mahomes", "player_not_a_market", "americanfootball_nfl") == []
+
+    def test_name_normalization_matches(self, monkeypatch):
+        self._stub(monkeypatch)
+        # punctuation/casing differences still resolve to the same player
+        assert pe._fetch_nfl_stat_values(
+            "Patrick   Mahomes", "player_pass_yds", "americanfootball_nfl") == [250.0, 300.0]
+
+    def test_dispatch_routes_nfl_to_nflverse(self, monkeypatch):
+        self._stub(monkeypatch)
+        assert pe.fetch_recent_stat_values(
+            "Patrick Mahomes", "player_pass_yds", "americanfootball_nfl") == [250.0, 300.0]
