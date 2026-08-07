@@ -398,7 +398,22 @@ def get_game_lines_oddsapi(sport_key: str) -> list:
     PREFERRED_BOOKS = ["draftkings", "fanduel", "betmgm", "betrivers", "bovada"]
     results = []
 
+    # The Odds API returns the whole upcoming schedule (the full NFL season is
+    # ~272 games). ESPN only gave us the next few days, so mirror that window —
+    # keep the Slate a *daily* slate — by allowing only games whose US-Eastern
+    # date is today through +2 days (same set as _espn_dates(days_forward=2)).
+    allowed_dates = set(_espn_dates(days_forward=2))
+
     for event in resp.json():
+        commence = event.get("commence_time")
+        if commence:
+            try:
+                dt = datetime.fromisoformat(commence.replace("Z", "+00:00"))
+                if dt.astimezone(ESPN_TZ).strftime("%Y%m%d") not in allowed_dates:
+                    continue
+            except (ValueError, TypeError):
+                pass  # unparseable timestamp → keep it rather than silently drop
+
         game = {
             "id":            event["id"],
             "sport":         sport_key,
